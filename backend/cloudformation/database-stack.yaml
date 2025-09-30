@@ -1,0 +1,265 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB tables for Private Lending Marketplace
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, production]
+    Description: Environment name
+
+Resources:
+  # Users Table
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "marketplace-users-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
+  # Loans Table
+  LoansTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "marketplace-loans-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: loan_id
+          AttributeType: S
+        - AttributeName: borrower_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: loan_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: BorrowerIndex
+          KeySchema:
+            - AttributeName: borrower_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
+  # Loan Participants Table
+  LoanParticipantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "marketplace-loan-participants-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: loan_id
+          AttributeType: S
+        - AttributeName: lender_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: invited_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: loan_id
+          KeyType: HASH
+        - AttributeName: lender_id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: LenderIndex
+          KeySchema:
+            - AttributeName: lender_id
+              KeyType: HASH
+            - AttributeName: invited_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: invited_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
+  # Invitations Table
+  InvitationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "marketplace-invitations-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: invitation_id
+          AttributeType: S
+        - AttributeName: invitee_email
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: invitation_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: invitee_email
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
+  # ACH Details Table
+  ACHDetailsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "marketplace-ach-details-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: loan_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: loan_id
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
+Outputs:
+  UsersTable:
+    Description: Users table name
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub "${AWS::StackName}-UsersTable"
+
+  LoansTable:
+    Description: Loans table name
+    Value: !Ref LoansTable
+    Export:
+      Name: !Sub "${AWS::StackName}-LoansTable"
+
+  LoanParticipantsTable:
+    Description: Loan participants table name
+    Value: !Ref LoanParticipantsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-LoanParticipantsTable"
+
+  InvitationsTable:
+    Description: Invitations table name
+    Value: !Ref InvitationsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-InvitationsTable"
+
+  ACHDetailsTable:
+    Description: ACH details table name
+    Value: !Ref ACHDetailsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ACHDetailsTable"
+
+  UsersTableArn:
+    Description: Users table ARN
+    Value: !GetAtt UsersTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-UsersTableArn"
+
+  LoansTableArn:
+    Description: Loans table ARN
+    Value: !GetAtt LoansTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LoansTableArn"
+
+  LoanParticipantsTableArn:
+    Description: Loan participants table ARN
+    Value: !GetAtt LoanParticipantsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LoanParticipantsTableArn"
+
+  InvitationsTableArn:
+    Description: Invitations table ARN
+    Value: !GetAtt InvitationsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-InvitationsTableArn"
+
+  ACHDetailsTableArn:
+    Description: ACH details table ARN
+    Value: !GetAtt ACHDetailsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ACHDetailsTableArn"

@@ -1,0 +1,15 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-privatelending-dev-6fb4a-authRole",
+      "UnauthRoleArn": "arn:aws:iam::638735673445:role/amplify-privatelending-dev-6fb4a-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::638735673445:role/amplify-privatelending-dev-6fb4a-authRole",
+      "Region": "us-east-1",
+      "DeploymentBucketName": "amplify-privatelending-dev-6fb4a-deployment",
+      "UnauthRoleName": "amplify-privatelending-dev-6fb4a-unauthRole",
+      "StackName": "amplify-privatelending-dev-6fb4a",
+      "StackId": "arn:aws:cloudformation:us-east-1:638735673445:stack/amplify-privatelending-dev-6fb4a/e12133c0-9e05-11f0-8a81-0ea9d7fb0717",
+      "AmplifyAppId": "djd3u81ud9mo8"
+    }
+  }
+}

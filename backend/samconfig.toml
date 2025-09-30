@@ -1,0 +1,43 @@
+version = 0.1
+
+[default]
+[default.global]
+[default.global.parameters]
+stack_name = "marketplace-backend-dev"
+
+[default.build]
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy]
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "marketplace-backend"
+region = "us-east-1"
+image_repositories = []
+parameter_overrides = [
+  "Environment=dev",
+  "DatabaseStackName=marketplace-database",
+  "CorsOrigin=http://localhost:3000"
+]
+
+[production]
+[production.global]
+[production.global.parameters]
+stack_name = "marketplace-backend-prod"
+
+[production.deploy]
+[production.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "marketplace-backend-prod"
+region = "us-east-1"
+parameter_overrides = [
+  "Environment=production",
+  "DatabaseStackName=marketplace-database-prod",
+  "CorsOrigin=https://yourdomain.com"
+]
