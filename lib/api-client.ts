@@ -80,11 +80,12 @@ export interface FundingProgress {
   total_funded: number
   remaining_amount: number
   funding_percentage: number
-  total_participants: number
-  accepted_participants: number
-  pending_participants: number
-  pending_amount: number
   is_fully_funded: boolean
+  // Privacy protection: participant counts removed for lenders
+  total_participants?: number
+  accepted_participants?: number
+  pending_participants?: number
+  pending_amount?: number
 }
 
 export interface LoanParticipant {
@@ -110,7 +111,10 @@ export interface Loan {
   status: string
   created_at: string
   total_funded: number
+  // Privacy protection: participants array empty for lenders
   participants: LoanParticipant[]
+  // New field: lender's own participation data
+  user_participation?: LoanParticipant | null
   funding_progress: FundingProgress
 }
 

@@ -92,12 +92,12 @@ export default function LoanDetailsPage() {
 
   if (!loan) return null
 
-  // Get participants for this loan
+  // Get participants for this loan (borrowers see full list, lenders see empty array)
   const participants = loan.participants || []
-
+  
   // Check if current user is a participant
-  const userParticipation = participants.find((p) => p.lender_id === user.user_id)
   const isBorrower = loan.borrower_id === user.user_id
+  const userParticipation = isBorrower ? null : loan.user_participation
   const isLender = !!userParticipation
 
   const getStatusBadge = (status: string) => {
@@ -210,15 +210,15 @@ export default function LoanDetailsPage() {
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">{fundingPercentage.toFixed(1)}% funded</p>
                   
-                  {loan.funding_progress && (
+                  {loan.funding_progress && isBorrower && (
                     <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="text-muted-foreground">Accepted Participants:</span>
-                        <p className="font-medium">{loan.funding_progress.accepted_participants}</p>
+                        <p className="font-medium">{loan.funding_progress.accepted_participants || 0}</p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Pending Participants:</span>
-                        <p className="font-medium">{loan.funding_progress.pending_participants}</p>
+                        <p className="font-medium">{loan.funding_progress.pending_participants || 0}</p>
                       </div>
                     </div>
                   )}
@@ -226,20 +226,21 @@ export default function LoanDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Lenders */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Lenders ({participants.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {participants.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No lenders yet</p>
-                  </div>
-                ) : (
+            {/* Lenders - Only shown to borrowers for privacy */}
+            {isBorrower && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Lenders ({participants.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {participants.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No lenders yet</p>
+                    </div>
+                  ) : (
                   <div className="space-y-4">
                     {participants.map((participation) => (
                       <div key={participation.lender_id} className="border rounded-lg overflow-hidden">
@@ -305,9 +306,10 @@ export default function LoanDetailsPage() {
                       </div>
                     ))}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}

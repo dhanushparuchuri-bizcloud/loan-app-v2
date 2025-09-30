@@ -170,7 +170,7 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Handle getting loan details with access control.
+    Handle getting loan details with access control and privacy filtering.
     
     Args:
         event: API Gateway event
@@ -205,11 +205,14 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
         borrower = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': loan['borrower_id']})
         borrower_name = borrower['name'] if borrower else 'Unknown'
         
-        # Get loan participants
-        participants = get_loan_participants(loan_id)
+        # Determine user role for privacy filtering
+        is_borrower = user.user_id == loan['borrower_id']
         
-        # Calculate funding progress
-        funding_progress = calculate_funding_progress(loan['amount'], loan['total_funded'], participants)
+        # Get filtered participant data based on user role
+        participant_data = get_filtered_participant_data(loan_id, user.user_id, is_borrower)
+        
+        # Calculate funding progress (basic info only)
+        funding_progress = calculate_basic_funding_progress(loan['amount'], loan['total_funded'])
         
         # Prepare detailed response
         loan_details = {
@@ -224,11 +227,12 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
             'status': loan['status'],
             'total_funded': float(loan['total_funded']),
             'created_at': loan['created_at'],
-            'participants': participants,
+            'user_participation': participant_data['user_participation'],
+            'participants': participant_data['participants'],
             'funding_progress': funding_progress
         }
         
-        logger.info(f"Retrieved loan details for: {loan_id}")
+        logger.info(f"Retrieved loan details for: {loan_id} (role: {'borrower' if is_borrower else 'lender'})")
         return ResponseHelper.success_response(loan_details)
         
     except ValueError as e:
@@ -420,9 +424,103 @@ def validate_loan_access(loan_id: str, user_id: str, borrower_id: str) -> bool:
         return False
 
 
+def get_filtered_participant_data(loan_id: str, requesting_user_id: str, is_borrower: bool) -> Dict[str, Any]:
+    """
+    Get participant data filtered based on user role for privacy protection.
+    
+    Args:
+        loan_id: Loan ID
+        requesting_user_id: ID of user requesting data
+        is_borrower: True if requesting user is the borrower
+        
+    Returns:
+        Filtered participant data with privacy controls
+    """
+    try:
+        participants = DynamoDBHelper.query_items(
+            TABLE_NAMES['LOAN_PARTICIPANTS'],
+            'loan_id = :loan_id',
+            {':loan_id': loan_id}
+        )
+        
+        user_participation = None
+        all_participants = []
+        
+        for participant in participants:
+            lender_id = participant['lender_id']
+            
+            # Handle pending invitations (placeholder lender_id)
+            if lender_id.startswith('pending:'):
+                email = lender_id.replace('pending:', '')
+                enriched_participant = {
+                    'lender_id': lender_id,
+                    'lender_name': f"Pending: {email}",
+                    'lender_email': email,
+                    'contribution_amount': float(participant['contribution_amount']),
+                    'status': participant['status'],
+                    'invited_at': participant['invited_at'],
+                    'responded_at': participant.get('responded_at')
+                }
+            else:
+                # Get lender information
+                lender = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': lender_id})
+                enriched_participant = {
+                    'lender_id': lender_id,
+                    'lender_name': lender['name'] if lender else 'Unknown',
+                    'lender_email': lender['email'] if lender else 'Unknown',
+                    'contribution_amount': float(participant['contribution_amount']),
+                    'status': participant['status'],
+                    'invited_at': participant['invited_at'],
+                    'responded_at': participant.get('responded_at')
+                }
+                
+                # Include ACH details for accepted participants (needed for repayment by borrowers)
+                if participant['status'] == ParticipantStatus.ACCEPTED and is_borrower:
+                    ach_details = DynamoDBHelper.get_item(
+                        TABLE_NAMES['ACH_DETAILS'], 
+                        {'user_id': lender_id, 'loan_id': loan_id}
+                    )
+                    if ach_details:
+                        enriched_participant['ach_details'] = {
+                            'bank_name': ach_details['bank_name'],
+                            'account_type': ach_details['account_type'],
+                            'routing_number': ach_details['routing_number'],
+                            'account_number': ach_details['account_number'],
+                            'special_instructions': ach_details.get('special_instructions')
+                        }
+            
+            # Check if this is the requesting user's participation
+            if lender_id == requesting_user_id:
+                user_participation = enriched_participant
+            
+            # Add to all participants list (will be filtered based on role)
+            all_participants.append(enriched_participant)
+        
+        # Apply privacy filtering based on user role
+        if is_borrower:
+            # Borrowers see all participants (for loan management)
+            return {
+                'user_participation': None,  # Not applicable for borrowers
+                'participants': all_participants
+            }
+        else:
+            # Lenders see only their own participation, no other lender info
+            return {
+                'user_participation': user_participation,
+                'participants': []  # Empty for lenders - privacy protection
+            }
+        
+    except Exception as e:
+        logger.error(f"Error getting filtered participant data: {str(e)}")
+        return {
+            'user_participation': None,
+            'participants': []
+        }
+
+
 def get_loan_participants(loan_id: str) -> List[Dict[str, Any]]:
     """
-    Get loan participants with lender information.
+    Get loan participants with lender information (legacy function for borrower use).
     
     Args:
         loan_id: Loan ID
@@ -490,9 +588,51 @@ def get_loan_participants(loan_id: str) -> List[Dict[str, Any]]:
         return []
 
 
+def calculate_basic_funding_progress(total_amount, total_funded) -> Dict[str, Any]:
+    """
+    Calculate basic loan funding progress metrics without participant details.
+    Used for privacy-protected responses to lenders.
+    
+    Args:
+        total_amount: Total loan amount (can be Decimal or float)
+        total_funded: Current funded amount (can be Decimal or float)
+        
+    Returns:
+        Basic funding progress metrics
+    """
+    try:
+        # Convert Decimal to float for calculations
+        total_amount = float(total_amount) if total_amount else 0.0
+        total_funded = float(total_funded) if total_funded else 0.0
+        
+        funding_percentage = (total_funded / total_amount * 100) if total_amount > 0 else 0
+        
+        return {
+            'total_amount': total_amount,
+            'total_funded': total_funded,
+            'remaining_amount': total_amount - total_funded,
+            'funding_percentage': round(funding_percentage, 2),
+            'is_fully_funded': total_funded >= total_amount
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating basic funding progress: {str(e)}")
+        # Convert to float for error response
+        total_amount_float = float(total_amount) if total_amount else 0.0
+        total_funded_float = float(total_funded) if total_funded else 0.0
+        return {
+            'total_amount': total_amount_float,
+            'total_funded': total_funded_float,
+            'remaining_amount': total_amount_float - total_funded_float,
+            'funding_percentage': 0,
+            'is_fully_funded': False
+        }
+
+
 def calculate_funding_progress(total_amount, total_funded, participants: List[Dict]) -> Dict[str, Any]:
     """
-    Calculate loan funding progress metrics.
+    Calculate loan funding progress metrics with participant details.
+    Used for borrower responses and legacy compatibility.
     
     Args:
         total_amount: Total loan amount (can be Decimal or float)
@@ -500,7 +640,7 @@ def calculate_funding_progress(total_amount, total_funded, participants: List[Di
         participants: List of participants
         
     Returns:
-        Funding progress metrics
+        Funding progress metrics with participant details
     """
     try:
         # Convert Decimal to float for calculations

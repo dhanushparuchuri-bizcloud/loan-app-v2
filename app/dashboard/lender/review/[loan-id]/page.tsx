@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient } from "@/lib/api-client"
-import { ArrowLeft, Check, X, DollarSign, Calendar, Target, User, Users, CreditCard } from "lucide-react"
+import { ArrowLeft, Check, X, DollarSign, Calendar, Target, User, TrendingUp, CreditCard } from "lucide-react"
 
 interface ACHDetails {
   bank_name: string
@@ -38,7 +38,6 @@ export default function LoanReviewPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loan, setLoan] = useState<any>(null)
   const [userParticipation, setUserParticipation] = useState<any>(null)
-  const [allParticipants, setAllParticipants] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -66,15 +65,10 @@ export default function LoanReviewPage() {
         if (response.success && response.data) {
           const loanData = response.data
           setLoan(loanData)
-          setAllParticipants(loanData.participants)
 
-          // Find the current user's participation
-          const currentUserParticipation = loanData.participants.find(
-            (p: any) => p.lender_id === user.user_id
-          )
-
-          if (currentUserParticipation) {
-            setUserParticipation(currentUserParticipation)
+          // With privacy protection, lenders get their participation in user_participation field
+          if (loanData.user_participation) {
+            setUserParticipation(loanData.user_participation)
           } else {
             setError('You are not invited to this loan')
           }
@@ -295,41 +289,48 @@ export default function LoanReviewPage() {
               </CardContent>
             </Card>
 
-            {/* Other Lenders */}
+            {/* Funding Status - Privacy Protected */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Other Participants
+                  <TrendingUp className="h-5 w-5" />
+                  Funding Status
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {allParticipants
-                    .filter((p) => p.lender_id !== user?.user_id)
-                    .map((participant) => (
-                      <div key={participant.lender_id} className="flex justify-between items-center p-3 border rounded">
-                        <div>
-                          <p className="font-medium">{participant.lender_name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {participant.status === "PENDING" ? "Pending review" : "Accepted"}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold">${participant.contribution_amount?.toLocaleString()}</p>
-                          <Badge
-                            variant={participant.status === "ACCEPTED" ? "default" : "secondary"}
-                            className={
-                              participant.status === "ACCEPTED"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }
-                          >
-                            {participant.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Progress</span>
+                      <span>
+                        ${loan?.funding_progress?.total_funded?.toLocaleString() || '0'} / ${loan?.amount?.toLocaleString() || '0'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-3">
+                      <div
+                        className="bg-primary h-3 rounded-full transition-all duration-300"
+                        style={{ width: `${loan?.funding_progress?.funding_percentage || 0}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-muted-foreground text-center">
+                      {Math.round(loan?.funding_progress?.funding_percentage || 0)}% funded
+                    </p>
+                  </div>
+                  
+                  <div className="pt-2 border-t">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Remaining Amount</span>
+                      <span className="font-medium">
+                        ${loan?.funding_progress?.remaining_amount?.toLocaleString() || '0'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-sm text-muted-foreground">Status</span>
+                      <Badge variant={loan?.funding_progress?.is_fully_funded ? "default" : "secondary"}>
+                        {loan?.funding_progress?.is_fully_funded ? "Fully Funded" : "Seeking Funding"}
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -533,17 +534,17 @@ export default function LoanReviewPage() {
                   <div className="flex justify-between text-sm">
                     <span>Funded</span>
                     <span>
-                      ${loan.total_funded?.toLocaleString()} / ${loan.amount?.toLocaleString()}
+                      ${loan?.funding_progress?.total_funded?.toLocaleString() || '0'} / ${loan?.amount?.toLocaleString() || '0'}
                     </span>
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
                       className="bg-primary h-2 rounded-full"
-                      style={{ width: `${((loan.total_funded || 0) / (loan.amount || 1)) * 100}%` }}
+                      style={{ width: `${loan?.funding_progress?.funding_percentage || 0}%` }}
                     ></div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {Math.round(((loan.total_funded || 0) / (loan.amount || 1)) * 100)}% funded
+                    {Math.round(loan?.funding_progress?.funding_percentage || 0)}% funded
                   </p>
                 </div>
               </CardContent>
