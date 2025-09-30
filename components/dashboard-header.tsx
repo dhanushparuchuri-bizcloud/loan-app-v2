@@ -39,13 +39,13 @@ export function DashboardHeader({ currentRole, onRoleSwitch }: DashboardHeaderPr
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
-                  {currentRole === "borrower" ? "Borrower" : "Lender"} Dashboard
+                  {currentRole === "borrower" ? "Issuer" : "Note Holder"} Dashboard
                   <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={onRoleSwitch}>
-                  Switch to {currentRole === "borrower" ? "Lender" : "Borrower"} Dashboard
+                  Switch to {currentRole === "borrower" ? "Note Holder" : "Issuer"} Dashboard
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

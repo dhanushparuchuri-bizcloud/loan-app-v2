@@ -70,10 +70,10 @@ export default function LoanReviewPage() {
           if (loanData.user_participation) {
             setUserParticipation(loanData.user_participation)
           } else {
-            setError('You are not invited to this loan')
+            setError('You are not invited to this note')
           }
         } else {
-          setError('Failed to load loan details')
+          setError('Failed to load note details')
         }
       } catch (err) {
         console.error('[LoanReview] Error fetching loan details:', err)
@@ -185,10 +185,10 @@ export default function LoanReviewPage() {
         <main className="p-6">
           <div className="text-center py-12">
             <h1 className="text-2xl font-bold mb-4">
-              {error || 'Loan Not Found'}
+              {error || 'Note Not Found'}
             </h1>
             <p className="text-muted-foreground mb-6">
-              {error || 'The loan you are looking for does not exist or you do not have access to it.'}
+              {error || 'The note you are looking for does not exist or you do not have access to it.'}
             </p>
             <Button onClick={() => router.push("/dashboard/lender")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -213,8 +213,8 @@ export default function LoanReviewPage() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Dashboard
           </Button>
-          <h1 className="text-3xl font-bold text-balance">Loan Review</h1>
-          <p className="text-muted-foreground">Review the loan details and provide your decision</p>
+          <h1 className="text-3xl font-bold text-balance">Note Review</h1>
+          <p className="text-muted-foreground">Review the note terms and provide your decision</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
@@ -225,13 +225,13 @@ export default function LoanReviewPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
-                  Loan Overview
+                  Note Terms
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <Label>Loan Amount</Label>
+                    <Label>Principal Amount</Label>
                     <p className="text-2xl font-bold">${loan.amount?.toLocaleString()}</p>
                   </div>
                   <div>
@@ -239,7 +239,7 @@ export default function LoanReviewPage() {
                     <p className="text-2xl font-bold text-green-600">{loan.interest_rate}%</p>
                   </div>
                   <div>
-                    <Label>Repayment Term</Label>
+                    <Label>Maturity Date</Label>
                     <p className="text-lg">{loan.term}</p>
                   </div>
                   <div>
@@ -265,14 +265,14 @@ export default function LoanReviewPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
-                  Borrower Information
+                  Issuer Information
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <div>
                     <Label>Name</Label>
-                    <p className="font-medium">{loan.borrower_name || 'Unknown Borrower'}</p>
+                    <p className="font-medium">{loan.borrower_name || 'Unknown Issuer'}</p>
                   </div>
                   <div>
                     <Label>Loan ID</Label>

@@ -145,8 +145,8 @@ export default function CreateLoanPage() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Dashboard
           </Button>
-          <h1 className="text-3xl font-bold text-balance">Create New Loan</h1>
-          <p className="text-muted-foreground">Follow the steps to create your loan request</p>
+          <h1 className="text-3xl font-bold text-balance">Create New Note</h1>
+          <p className="text-muted-foreground">Follow the steps to create your promissory note</p>
         </div>
 
         {/* Progress Indicator */}
@@ -158,10 +158,10 @@ export default function CreateLoanPage() {
           <Progress value={progressPercentage} className="mb-4" />
           <div className="flex justify-between text-sm">
             <span className={currentStep >= 1 ? "text-primary font-medium" : "text-muted-foreground"}>
-              Loan Details
+              Note Terms
             </span>
             <span className={currentStep >= 2 ? "text-primary font-medium" : "text-muted-foreground"}>
-              Select Lenders
+              Select Note Holders
             </span>
             <span className={currentStep >= 3 ? "text-primary font-medium" : "text-muted-foreground"}>
               Review & Submit
@@ -172,8 +172,8 @@ export default function CreateLoanPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {currentStep === 1 && "Loan Details"}
-              {currentStep === 2 && "Select Lenders"}
+              {currentStep === 1 && "Note Terms"}
+              {currentStep === 2 && "Select Note Holders"}
               {currentStep === 3 && "Review & Submit"}
             </CardTitle>
           </CardHeader>
@@ -183,7 +183,7 @@ export default function CreateLoanPage() {
               <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="amount">Loan Amount ($)</Label>
+                    <Label htmlFor="amount">Principal Amount ($)</Label>
                     <Input
                       id="amount"
                       type="number"
@@ -200,7 +200,7 @@ export default function CreateLoanPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="term">Repayment Term</Label>
+                    <Label htmlFor="term">Maturity Date</Label>
                     <Select
                       value={loanDetails.term}
                       onValueChange={(value) => setLoanDetails({ ...loanDetails, term: value })}
@@ -268,7 +268,7 @@ export default function CreateLoanPage() {
                         description: e.target.value,
                       })
                     }
-                    placeholder="Describe how you plan to use this loan..."
+                    placeholder="Describe how you plan to use these funds..."
                     maxLength={500}
                     rows={4}
                   />
@@ -281,10 +281,10 @@ export default function CreateLoanPage() {
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Add Lenders</h3>
+                  <h3 className="text-lg font-semibold">Add Note Holders</h3>
                   <Button variant="outline" onClick={() => setShowNewLenderForm(!showNewLenderForm)}>
                     <Plus className="mr-2 h-4 w-4" />
-                    Invite New Lender
+                    Invite New Note Holder
                   </Button>
                 </div>
 
@@ -298,7 +298,7 @@ export default function CreateLoanPage() {
                             id="lender-name"
                             value={newLenderName}
                             onChange={(e) => setNewLenderName(e.target.value)}
-                            placeholder="Lender's name"
+                            placeholder="Note holder's name"
                           />
                         </div>
                         <div className="space-y-2">
@@ -308,12 +308,12 @@ export default function CreateLoanPage() {
                             type="email"
                             value={newLenderEmail}
                             onChange={(e) => setNewLenderEmail(e.target.value)}
-                            placeholder="lender@example.com"
+                            placeholder="noteholder@example.com"
                           />
                         </div>
                       </div>
                       <div className="flex gap-2 mt-4">
-                        <Button onClick={handleAddLender}>Add Lender</Button>
+                        <Button onClick={handleAddLender}>Add Note Holder</Button>
                         <Button variant="outline" onClick={() => setShowNewLenderForm(false)}>
                           Cancel
                         </Button>
@@ -324,9 +324,9 @@ export default function CreateLoanPage() {
 
                 {/* Selected Lenders */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Selected Lenders</h3>
+                  <h3 className="text-lg font-semibold">Selected Note Holders</h3>
                   {selectedLenders.length === 0 ? (
-                    <p className="text-muted-foreground">No lenders selected yet. Add lenders above.</p>
+                    <p className="text-muted-foreground">No note holders selected yet. Add note holders above.</p>
                   ) : (
                     selectedLenders.map((lender) => (
                       <Card key={lender.id}>
@@ -364,7 +364,7 @@ export default function CreateLoanPage() {
                     <CardContent className="pt-6">
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span>Total Loan Amount:</span>
+                          <span>Total Principal Amount:</span>
                           <span className="font-medium">${loanDetails.amount.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
@@ -380,7 +380,7 @@ export default function CreateLoanPage() {
                           </span>
                         </div>
                         {!isAmountValid && (
-                          <p className="text-sm text-red-600">Total assigned amount must equal the loan amount</p>
+                          <p className="text-sm text-red-600">Total assigned amount must equal the principal amount</p>
                         )}
                       </div>
                     </CardContent>
@@ -394,12 +394,12 @@ export default function CreateLoanPage() {
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Loan Summary</CardTitle>
+                    <CardTitle>Note Summary</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <Label>Loan Amount</Label>
+                        <Label>Principal Amount</Label>
                         <p className="text-2xl font-bold">${loanDetails.amount.toLocaleString()}</p>
                       </div>
                       <div>
@@ -407,7 +407,7 @@ export default function CreateLoanPage() {
                         <p className="text-2xl font-bold">{loanDetails.interestRate}%</p>
                       </div>
                       <div>
-                        <Label>Repayment Term</Label>
+                        <Label>Maturity Date</Label>
                         <p className="text-lg">{loanDetails.term}</p>
                       </div>
                       <div>
@@ -424,7 +424,7 @@ export default function CreateLoanPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Lenders ({selectedLenders.length})</CardTitle>
+                    <CardTitle>Note Holders ({selectedLenders.length})</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
@@ -464,7 +464,7 @@ export default function CreateLoanPage() {
               ) : (
                 <Button onClick={handleSubmit}>
                   <Check className="mr-2 h-4 w-4" />
-                  Submit Loan Request
+                  Create Note
                 </Button>
               )}
             </div>

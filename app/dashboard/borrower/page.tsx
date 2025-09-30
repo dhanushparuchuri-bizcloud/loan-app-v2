@@ -78,7 +78,7 @@ export default function BorrowerDashboard() {
       <main className="p-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-balance">Welcome back, {user.name}</h1>
-          <p className="text-muted-foreground">Manage your loans and track your borrowing activity</p>
+          <p className="text-muted-foreground">Manage your notes and track your issuing activity</p>
         </div>
 
         {/* Error Alert */}
@@ -97,21 +97,21 @@ export default function BorrowerDashboard() {
         {/* Stats Cards */}
         <div className="grid gap-4 md:grid-cols-3 mb-8">
           <StatsCard
-            title="Active Loans"
+            title="Active Notes"
             value={borrowerStats?.active_loans || activeLoans.length}
-            subtitle={`$${totalBorrowed.toLocaleString()} total borrowed`}
+            subtitle={`$${totalBorrowed.toLocaleString()} total issued`}
             icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           />
           <StatsCard
-            title="Total Borrowed"
+            title="Total Issued"
             value={`$${totalBorrowed.toLocaleString()}`}
-            subtitle={`${loans.length} loans total`}
+            subtitle={`${loans.length} notes total`}
             icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
           />
           <StatsCard
             title="Pending Requests"
             value={borrowerStats?.pending_requests || pendingLoans.length}
-            subtitle="Awaiting lender approval"
+            subtitle="Awaiting note holder approval"
             icon={<Clock className="h-4 w-4 text-muted-foreground" />}
           />
         </div>
@@ -121,7 +121,7 @@ export default function BorrowerDashboard() {
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle>My Loans</CardTitle>
+                <CardTitle>My Notes</CardTitle>
               </CardHeader>
               <CardContent>
                 {loans.length === 0 ? (
@@ -129,11 +129,11 @@ export default function BorrowerDashboard() {
                     <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4">
                       <DollarSign className="h-8 w-8 text-muted-foreground" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">No loans yet</h3>
-                    <p className="text-muted-foreground mb-4">Create your first loan to get started</p>
+                    <h3 className="text-lg font-semibold mb-2">No notes yet</h3>
+                    <p className="text-muted-foreground mb-4">Create your first note to get started</p>
                     <Button onClick={() => router.push("/dashboard/borrower/create-loan")}>
                       <Plus className="mr-2 h-4 w-4" />
-                      Create New Loan
+                      Create New Note
                     </Button>
                   </div>
                 ) : (
@@ -185,7 +185,7 @@ export default function BorrowerDashboard() {
               <CardContent className="space-y-4">
                 <Button className="w-full" size="lg" onClick={() => router.push("/dashboard/borrower/create-loan")}>
                   <Plus className="mr-2 h-4 w-4" />
-                  Create New Loan
+                  Create New Note
                 </Button>
               </CardContent>
             </Card>

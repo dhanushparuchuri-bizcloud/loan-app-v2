@@ -100,8 +100,8 @@ export default function LenderDashboard() {
 
       <main className="p-6">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-balance">Lending Portfolio</h1>
-          <p className="text-muted-foreground">Manage your investments and review loan opportunities</p>
+          <h1 className="text-3xl font-bold text-balance">Note Portfolio</h1>
+          <p className="text-muted-foreground">Manage your investments and review note opportunities</p>
         </div>
 
         {/* Error Alert */}
@@ -136,7 +136,7 @@ export default function LenderDashboard() {
                     <CardContent className="pt-6">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <h4 className="font-semibold">Loan Request</h4>
+                          <h4 className="font-semibold">Note Offering</h4>
                           <Badge variant="outline" className="text-yellow-700 border-yellow-300">
                             {invitation.loan_purpose || 'Business'}
                           </Badge>
@@ -157,7 +157,7 @@ export default function LenderDashboard() {
                             <span className="font-medium">{invitation.interest_rate || 'N/A'}%</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Borrower:</span>
+                            <span className="text-muted-foreground">Issuer:</span>
                             <span className="font-medium">{invitation.borrower_name || 'Unknown'}</span>
                           </div>
                         </div>
@@ -170,7 +170,7 @@ export default function LenderDashboard() {
                             onClick={() => router.push(`/dashboard/lender/review/${invitation.loan_id}`)}
                           >
                             <Eye className="mr-2 h-4 w-4" />
-                            Review Loan
+                            Review Note
                           </Button>
                         </div>
                       </div>
@@ -187,13 +187,13 @@ export default function LenderDashboard() {
           <StatsCard
             title="Pending Invitations"
             value={lenderStats?.pending_invitations || 0}
-            subtitle="Loans to review"
+            subtitle="Notes to review"
             icon={<Bell className="h-4 w-4 text-muted-foreground" />}
           />
           <StatsCard
             title="Active Investments"
             value={lenderStats?.active_investments || 0}
-            subtitle="Current loans"
+            subtitle="Current notes"
             icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           />
           <StatsCard
@@ -210,7 +210,7 @@ export default function LenderDashboard() {
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>My Lending Portfolio</CardTitle>
+                  <CardTitle>My Note Portfolio</CardTitle>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-32">
                       <SelectValue />
@@ -238,15 +238,15 @@ export default function LenderDashboard() {
                     </h3>
                     <p className="text-muted-foreground mb-4">
                       {invitations.length > 0
-                        ? "You have pending loan invitations to review above"
-                        : "Start lending to build your investment portfolio"}
+                        ? "You have pending note invitations to review above"
+                        : "Start investing to build your note portfolio"}
                     </p>
                   </div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Borrower</TableHead>
+                        <TableHead>Issuer</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Interest</TableHead>
                         <TableHead>Status</TableHead>
@@ -281,7 +281,7 @@ export default function LenderDashboard() {
                             <div className="space-y-1">
                               {getStatusBadge(item.participation_status)}
                               <p className="text-xs text-muted-foreground">
-                                Loan: {item.loan_status}
+                                Note: {item.loan_status}
                               </p>
                             </div>
                           </TableCell>

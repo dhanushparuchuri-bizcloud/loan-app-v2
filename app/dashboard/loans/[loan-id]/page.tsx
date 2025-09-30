@@ -71,9 +71,9 @@ export default function LoanDetailsPage() {
         <main className="p-6">
           <div className="text-center py-12">
             <AlertCircle className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <h1 className="text-2xl font-bold mb-2">Loan Not Found</h1>
+            <h1 className="text-2xl font-bold mb-2">Note Not Found</h1>
             <p className="text-muted-foreground mb-4">
-              {error || "The loan you're looking for doesn't exist or you don't have access to it."}
+              {error || "The note you're looking for doesn't exist or you don't have access to it."}
             </p>
             <div className="flex gap-2 justify-center">
               <Button onClick={() => router.back()}>
@@ -133,8 +133,8 @@ export default function LoanDetailsPage() {
           </Button>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-balance">Loan Details</h1>
-              <p className="text-muted-foreground">Loan ID: {loan.loan_id}</p>
+              <h1 className="text-3xl font-bold text-balance">Note Details</h1>
+              <p className="text-muted-foreground">Note ID: {loan.loan_id}</p>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" onClick={handlePrint}>
@@ -152,14 +152,14 @@ export default function LoanDetailsPage() {
             {/* Loan Overview */}
             <Card>
               <CardHeader>
-                <CardTitle>Loan Overview</CardTitle>
+                <CardTitle>Note Terms</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <DollarSign className="h-4 w-4" />
-                      <span className="text-sm">Loan Amount</span>
+                      <span className="text-sm">Principal Amount</span>
                     </div>
                     <p className="text-2xl font-bold">${loan.amount.toLocaleString()}</p>
                   </div>
@@ -232,13 +232,13 @@ export default function LoanDetailsPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    Lenders ({participants.length})
+                    Note Holders ({participants.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {participants.length === 0 ? (
                     <div className="text-center py-8">
-                      <p className="text-muted-foreground">No lenders yet</p>
+                      <p className="text-muted-foreground">No note holders yet</p>
                     </div>
                   ) : (
                   <div className="space-y-4">
@@ -252,7 +252,7 @@ export default function LoanDetailsPage() {
                               </span>
                             </div>
                             <div>
-                              <p className="font-medium">{participation.lender_name || 'Unknown Lender'}</p>
+                              <p className="font-medium">{participation.lender_name || 'Unknown Note Holder'}</p>
                               <p className="text-sm text-muted-foreground">{participation.lender_email || ''}</p>
                             </div>
                           </div>
@@ -317,7 +317,7 @@ export default function LoanDetailsPage() {
             {/* Borrower Info */}
             <Card>
               <CardHeader>
-                <CardTitle>Borrower Information</CardTitle>
+                <CardTitle>Issuer Information</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -328,8 +328,8 @@ export default function LoanDetailsPage() {
                       </span>
                     </div>
                     <div>
-                      <p className="font-medium">{loan.borrower_name || 'Unknown Borrower'}</p>
-                      <p className="text-sm text-muted-foreground">Borrower ID: {loan.borrower_id}</p>
+                      <p className="font-medium">{loan.borrower_name || 'Unknown Issuer'}</p>
+                      <p className="text-sm text-muted-foreground">Issuer ID: {loan.borrower_id}</p>
                     </div>
                   </div>
                 </div>
@@ -383,7 +383,7 @@ export default function LoanDetailsPage() {
                   <div className="flex gap-3">
                     <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                     <div>
-                      <p className="font-medium">Loan Created</p>
+                      <p className="font-medium">Note Created</p>
                       <p className="text-sm text-muted-foreground">{new Date(loan.created_at).toLocaleDateString()}</p>
                     </div>
                   </div>
@@ -391,7 +391,7 @@ export default function LoanDetailsPage() {
                     <div className="flex gap-3">
                       <div className="w-2 h-2 rounded-full bg-green-500 mt-2" />
                       <div>
-                        <p className="font-medium">Loan Activated</p>
+                        <p className="font-medium">Note Activated</p>
                         <p className="text-sm text-muted-foreground">Funding complete</p>
                       </div>
                     </div>
