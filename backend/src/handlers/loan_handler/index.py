@@ -16,6 +16,7 @@ from shared.jwt_auth import JWTAuth, AuthenticatedUser
 from shared.uuid_helper import UUIDHelper
 from shared.validation_schemas import CreateLoanRequest, ValidationHelper
 from shared.response_helper import ResponseHelper
+from shared.payment_calculator import PaymentCalculator
 
 # Constants to avoid import conflicts
 class LoanStatus:
@@ -111,25 +112,55 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
         body = json.loads(event.get('body', '{}'))
         request_data = ValidationHelper.validate_request_body(CreateLoanRequest, body)
         
+        # Validate that user is not inviting themselves as a lender
+        user_email_lower = user.email.lower()
+        for lender in request_data.lenders:
+            if lender.email.lower() == user_email_lower:
+                logger.warning(f"User {user.user_id} attempted to invite themselves as lender: {lender.email}")
+                return ResponseHelper.validation_error_response(
+                    "You cannot invite yourself as a lender to your own loan"
+                )
+        
         logger.info(f"Creating loan for borrower: {user.user_id}, amount: {request_data.amount}")
         
         # Generate loan ID and timestamp
         loan_id = UUIDHelper.generate_uuid()
         now = datetime.now(timezone.utc).isoformat()
         
-        # Create loan record
+        # Calculate loan-level maturity terms
+        loan_terms = PaymentCalculator.calculate_loan_terms(
+            start_date=request_data.maturity_terms.start_date,
+            payment_frequency=request_data.maturity_terms.payment_frequency,
+            term_length=request_data.maturity_terms.term_length
+        )
+        
+        # Create loan record with enhanced maturity terms
         loan = {
             'loan_id': loan_id,
             'borrower_id': user.user_id,
             'amount': Decimal(str(request_data.amount)),
             'interest_rate': Decimal(str(request_data.interest_rate)),
-            'term': ValidationHelper.sanitize_string(request_data.term),
+            # Enhanced maturity terms
+            'start_date': request_data.maturity_terms.start_date,
+            'payment_frequency': request_data.maturity_terms.payment_frequency,
+            'term_length': request_data.maturity_terms.term_length,
+            'maturity_date': loan_terms['maturity_date'],
+            'total_payments': loan_terms['total_payments'],
             'purpose': ValidationHelper.sanitize_string(request_data.purpose),
             'description': ValidationHelper.sanitize_string(request_data.description),
             'status': LoanStatus.PENDING,
             'total_funded': Decimal('0'),
             'created_at': now
         }
+        
+        # Add entity details if provided
+        if request_data.entity_details:
+            loan.update({
+                'entity_name': ValidationHelper.sanitize_string(request_data.entity_details.entity_name) if request_data.entity_details.entity_name else None,
+                'entity_type': request_data.entity_details.entity_type,
+                'entity_tax_id': ValidationHelper.sanitize_string(request_data.entity_details.entity_tax_id) if request_data.entity_details.entity_tax_id else None,
+                'borrower_relationship': request_data.entity_details.borrower_relationship
+            })
         
         # Save loan to database
         DynamoDBHelper.put_item(TABLE_NAMES['LOANS'], loan)
@@ -144,7 +175,13 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
             'borrower_id': user.user_id,
             'amount': request_data.amount,
             'interest_rate': request_data.interest_rate,
-            'term': request_data.term,
+            'maturity_terms': {
+                'start_date': request_data.maturity_terms.start_date,
+                'payment_frequency': request_data.maturity_terms.payment_frequency,
+                'term_length': request_data.maturity_terms.term_length,
+                'maturity_date': loan_terms['maturity_date'],
+                'total_payments': loan_terms['total_payments']
+            },
             'purpose': request_data.purpose,
             'description': request_data.description,
             'status': LoanStatus.PENDING,
@@ -197,7 +234,7 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
             return ResponseHelper.not_found_response('Loan not found')
         
         # Check access permissions (borrower or invited lender)
-        has_access = validate_loan_access(loan_id, user.user_id, loan['borrower_id'])
+        has_access = validate_loan_access(loan_id, user.user_id, user.email, loan['borrower_id'])
         if not has_access:
             return ResponseHelper.forbidden_response('Access denied to this loan')
         
@@ -209,10 +246,115 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
         is_borrower = user.user_id == loan['borrower_id']
         
         # Get filtered participant data based on user role
-        participant_data = get_filtered_participant_data(loan_id, user.user_id, is_borrower)
+        participant_data = get_filtered_participant_data(loan_id, user.user_id, user.email, is_borrower)
         
         # Calculate funding progress (basic info only)
         funding_progress = calculate_basic_funding_progress(loan['amount'], loan['total_funded'])
+        
+        # Handle backward compatibility for old loans without maturity terms
+        if 'start_date' in loan:
+            # New format with enhanced maturity terms
+            maturity_terms = {
+                'start_date': loan['start_date'],
+                'payment_frequency': loan['payment_frequency'],
+                'term_length': loan['term_length'],
+                'maturity_date': loan['maturity_date'],
+                'total_payments': loan['total_payments']
+            }
+        else:
+            # Old format - convert on the fly
+            maturity_terms = {
+                'start_date': loan['created_at'][:10],  # Use creation date as start
+                'payment_frequency': loan.get('term', 'Monthly'),  # Use old term field
+                'term_length': 12,  # Default to 12 months
+                'maturity_date': loan['created_at'][:10],  # Placeholder
+                'total_payments': 12  # Default
+            }
+        
+        # Calculate payment details based on user role
+        user_participation_with_payments = None
+        borrower_payment_details = None
+        
+        logger.info(f"Payment calculation conditions - is_borrower: {is_borrower}, user_participation exists: {bool(participant_data['user_participation'])}")
+        
+        if not is_borrower and participant_data['user_participation']:
+            # LENDER: Calculate their individual payment details
+            user_participation = participant_data['user_participation']
+            logger.info(f"Calculating lender payments for user {user.user_id}, contribution: {user_participation['contribution_amount']}")
+            try:
+                lender_payments = PaymentCalculator.calculate_lender_payments(
+                    contribution_amount=float(user_participation['contribution_amount']),
+                    annual_rate=float(loan['interest_rate']) / 100,  # Convert percentage to decimal
+                    total_payments=int(maturity_terms['total_payments']),
+                    payment_frequency=maturity_terms['payment_frequency']
+                )
+                logger.info(f"Lender payment calculation successful: {lender_payments}")
+            except Exception as e:
+                logger.error(f"Error calculating lender payments: {str(e)}")
+                lender_payments = {
+                    'payment_amount': 0,
+                    'total_interest': 0,
+                    'total_repayment': 0
+                }
+            
+            user_participation_with_payments = {
+                'lender_id': user_participation['lender_id'],
+                'contribution_amount': user_participation['contribution_amount'],
+                'status': user_participation['status'],
+                'invited_at': user_participation['invited_at'],
+                'responded_at': user_participation.get('responded_at'),
+                'payment_amount': lender_payments['payment_amount'],
+                'total_interest': lender_payments['total_interest'],
+                'total_repayment': lender_payments['total_repayment'],
+                'disclaimer': "These calculations are estimates for informational purposes only. Not financial or legal advice. No warranties or guarantees of accuracy. Your actual returns, payment schedule, and terms will be established in your signed agreement with the borrower. Independently verify all calculations and consult your financial and legal advisors before committing funds. We accept no liability for investment decisions based on these estimates."
+            }
+        
+        elif is_borrower:
+            # BORROWER: Calculate payment details for each lender + total
+            lender_payment_details = []
+            total_payment_amount = 0
+            
+            for participant in participant_data['participants']:
+                # Only calculate for non-pending participants (those with real lender_ids)
+                if not participant['lender_id'].startswith('pending:'):
+                    lender_payments = PaymentCalculator.calculate_lender_payments(
+                        contribution_amount=float(participant['contribution_amount']),
+                        annual_rate=float(loan['interest_rate']) / 100,
+                        total_payments=int(maturity_terms['total_payments']),
+                        payment_frequency=maturity_terms['payment_frequency']
+                    )
+                    
+                    lender_detail = {
+                        'lender_id': participant['lender_id'],
+                        'lender_name': participant['lender_name'],
+                        'lender_email': participant['lender_email'],
+                        'contribution_amount': participant['contribution_amount'],
+                        'payment_amount': lender_payments['payment_amount'],
+                        'status': participant['status']
+                    }
+                    
+                    # Include ACH details for accepted lenders (borrower needs this for payments)
+                    if 'ach_details' in participant:
+                        lender_detail['ach_details'] = participant['ach_details']
+                    
+                    lender_payment_details.append(lender_detail)
+                    total_payment_amount += lender_payments['payment_amount']
+            
+            # Generate payment schedule dates
+            payment_dates = PaymentCalculator._generate_payment_schedule(
+                maturity_terms['start_date'],
+                maturity_terms['payment_frequency'],
+                int(maturity_terms['total_payments'])
+            )
+            
+            borrower_payment_details = {
+                'total_payment_amount': round(total_payment_amount, 2),
+                'payment_frequency': maturity_terms['payment_frequency'],
+                'total_payments': int(maturity_terms['total_payments']),
+                'payment_dates': payment_dates,
+                'lender_payments': lender_payment_details,
+                'disclaimer': "Estimates for informational purposes only. Not financial or legal advice. No warranties or guarantees of accuracy. Your lender will provide final payment amounts and terms. Review all documents and consult your lender before signing. We accept no liability for reliance on these estimates."
+            }
         
         # Prepare detailed response
         loan_details = {
@@ -221,13 +363,14 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
             'borrower_name': borrower_name,
             'amount': float(loan['amount']),
             'interest_rate': float(loan['interest_rate']),
-            'term': loan['term'],
+            'maturity_terms': maturity_terms,
             'purpose': loan['purpose'],
             'description': loan['description'],
             'status': loan['status'],
             'total_funded': float(loan['total_funded']),
             'created_at': loan['created_at'],
-            'user_participation': participant_data['user_participation'],
+            'user_participation': user_participation_with_payments,
+            'borrower_payment_details': borrower_payment_details,
             'participants': participant_data['participants'],
             'funding_progress': funding_progress
         }
@@ -277,11 +420,19 @@ def handle_get_my_loans(event: Dict[str, Any]) -> Dict[str, Any]:
             participants = get_loan_participants(loan['loan_id'])
             funding_progress = calculate_funding_progress(loan['amount'], loan['total_funded'], participants)
             
+            # Handle backward compatibility for old loans without maturity terms
+            if 'start_date' in loan:
+                # New format with enhanced maturity terms
+                term_display = f"{loan['payment_frequency']} for {loan['term_length']} months"
+            else:
+                # Old format - use existing term field
+                term_display = loan.get('term', 'Unknown')
+            
             enriched_loan = {
                 'loan_id': loan['loan_id'],
                 'amount': float(loan['amount']),
                 'interest_rate': float(loan['interest_rate']),
-                'term': loan['term'],
+                'term': term_display,
                 'purpose': loan['purpose'],
                 'description': loan['description'],
                 'status': loan['status'],
@@ -349,6 +500,19 @@ def create_lender_invitations(loan_id: str, borrower_id: str, lenders: List[Dict
                 participants_created += 1
                 logger.info(f"Created participant record for existing user: {email}")
                 
+                # Activate user as lender if not already
+                if not user.get('is_lender', False):
+                    DynamoDBHelper.update_item(
+                        TABLE_NAMES['USERS'],
+                        {'user_id': user['user_id']},
+                        'SET is_lender = :true, user_type = :active_lender',
+                        {
+                            ':true': True,
+                            ':active_lender': UserType.ACTIVE_LENDER
+                        }
+                    )
+                    logger.info(f"Activated lender role for user: {email}")
+                
             else:
                 # User doesn't exist - create invitation record
                 invitation_id = UUIDHelper.generate_uuid()
@@ -389,13 +553,14 @@ def create_lender_invitations(loan_id: str, borrower_id: str, lenders: List[Dict
         }
 
 
-def validate_loan_access(loan_id: str, user_id: str, borrower_id: str) -> bool:
+def validate_loan_access(loan_id: str, user_id: str, user_email: str, borrower_id: str) -> bool:
     """
     Validate if user has access to view loan details.
     
     Args:
         loan_id: Loan ID
         user_id: User ID requesting access
+        user_email: Email of user requesting access
         borrower_id: Loan borrower ID
         
     Returns:
@@ -404,6 +569,7 @@ def validate_loan_access(loan_id: str, user_id: str, borrower_id: str) -> bool:
     try:
         # Borrower always has access
         if user_id == borrower_id:
+            logger.info(f"Loan access granted: user {user_id} is borrower for loan {loan_id}")
             return True
         
         # Check if user is an invited lender
@@ -413,10 +579,17 @@ def validate_loan_access(loan_id: str, user_id: str, borrower_id: str) -> bool:
             {':loan_id': loan_id}
         )
         
+        pending_lender_id = f"pending:{user_email}"
+        logger.info(f"Access validation for loan {loan_id}: user_id={user_id}, user_email={user_email}, pending_lender_id={pending_lender_id}")
+        logger.info(f"Found {len(participants)} participants: {[p['lender_id'] for p in participants]}")
+        
         for participant in participants:
-            if participant['lender_id'] == user_id:
+            # Check both actual user_id and pending:email format
+            if participant['lender_id'] == user_id or participant['lender_id'] == pending_lender_id:
+                logger.info(f"Loan access granted: user {user_id} found as participant with lender_id {participant['lender_id']}")
                 return True
         
+        logger.info(f"Loan access denied: user {user_id} not found in participants")
         return False
         
     except Exception as e:
@@ -424,13 +597,14 @@ def validate_loan_access(loan_id: str, user_id: str, borrower_id: str) -> bool:
         return False
 
 
-def get_filtered_participant_data(loan_id: str, requesting_user_id: str, is_borrower: bool) -> Dict[str, Any]:
+def get_filtered_participant_data(loan_id: str, requesting_user_id: str, requesting_user_email: str, is_borrower: bool) -> Dict[str, Any]:
     """
     Get participant data filtered based on user role for privacy protection.
     
     Args:
         loan_id: Loan ID
         requesting_user_id: ID of user requesting data
+        requesting_user_email: Email of user requesting data
         is_borrower: True if requesting user is the borrower
         
     Returns:
@@ -490,7 +664,9 @@ def get_filtered_participant_data(loan_id: str, requesting_user_id: str, is_borr
                         }
             
             # Check if this is the requesting user's participation
-            if lender_id == requesting_user_id:
+            # Handle both actual user_id and pending:email format
+            pending_lender_id = f"pending:{requesting_user_email}"
+            if lender_id == requesting_user_id or lender_id == pending_lender_id:
                 user_participation = enriched_participant
             
             # Add to all participants list (will be filtered based on role)

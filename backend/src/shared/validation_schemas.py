@@ -53,10 +53,37 @@ class LenderInviteRequest(BaseModel):
         return v
 
 
+class MaturityTermsRequest(BaseModel):
+    start_date: str = Field(..., description="Payment start date (YYYY-MM-DD)")
+    payment_frequency: str = Field(..., description="Payment frequency")
+    term_length: int = Field(..., ge=1, le=60, description="Term length in months")
+    
+    @validator('payment_frequency')
+    def validate_payment_frequency(cls, v):
+        valid_frequencies = ['Weekly', 'Bi-Weekly', 'Monthly', 'Quarterly', 'Annually']
+        if v not in valid_frequencies:
+            raise ValueError(f"Payment frequency must be one of: {', '.join(valid_frequencies)}")
+        return v
+    
+    @validator('start_date')
+    def validate_start_date(cls, v):
+        from datetime import datetime
+        try:
+            start_date = datetime.fromisoformat(v)
+            today = datetime.now().date()
+            if start_date.date() < today:
+                raise ValueError("Start date cannot be in the past")
+            return v
+        except ValueError as e:
+            if "Start date cannot be in the past" in str(e):
+                raise e
+            raise ValueError("Invalid date format. Use YYYY-MM-DD")
+
+
 class CreateLoanRequest(BaseModel):
     amount: float = Field(..., ge=1000, le=1000000, description="Loan amount")
     interest_rate: float = Field(..., ge=0.01, le=50, description="Interest rate percentage")
-    term: str = Field(..., min_length=1, description="Loan term")
+    maturity_terms: MaturityTermsRequest = Field(..., description="Maturity terms")
     purpose: str = Field(..., min_length=1, max_length=100, description="Loan purpose")
     description: str = Field(..., min_length=10, max_length=1000, description="Loan description")
     lenders: List[LenderInviteRequest] = Field(..., min_items=1, description="List of lender invitations")
@@ -243,6 +270,7 @@ __all__ = [
     'RegisterUserRequest',
     'LoginUserRequest',
     'CreateLoanRequest',
+    'MaturityTermsRequest',
     'LenderInviteRequest',
     'AcceptLoanRequest',
     'PaginationRequest',

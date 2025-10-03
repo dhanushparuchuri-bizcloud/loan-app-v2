@@ -137,10 +137,18 @@ export default function LenderDashboard() {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <h4 className="font-semibold">Note Offering</h4>
-                          <Badge variant="outline" className="text-yellow-700 border-yellow-300">
-                            {invitation.loan_purpose || 'Business'}
+                          <Badge variant="outline" className="text-yellow-700 border-yellow-300 flex items-center gap-1">
+                            {invitation.loan_purpose === "Business" && "🏢"} {invitation.loan_purpose || 'Business'}
                           </Badge>
                         </div>
+                        {invitation.loan_purpose === "Business" && invitation.entity_name && (
+                          <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="text-xs text-blue-700">
+                              <div className="font-medium">{invitation.entity_name}</div>
+                              <div className="text-blue-600">{invitation.entity_type}</div>
+                            </div>
+                          </div>
+                        )}
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Total Amount:</span>
@@ -258,9 +266,16 @@ export default function LenderDashboard() {
                       {filteredPortfolio.map((item) => (
                         <TableRow key={item.loan_id}>
                           <TableCell>
-                            <div>
+                            <div className="space-y-1">
                               <p className="font-medium">{item.borrower_name}</p>
-                              <p className="text-sm text-muted-foreground">{item.purpose}</p>
+                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                {item.purpose === "Business" && "🏢"} {item.purpose}
+                              </div>
+                              {item.purpose === "Business" && item.entity_name && (
+                                <div className="text-xs text-blue-600">
+                                  {item.entity_name} ({item.entity_type})
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -287,12 +302,26 @@ export default function LenderDashboard() {
                           </TableCell>
                           <TableCell>
                             <div>
-                              <p className="font-medium text-green-600">
-                                ${item.expected_annual_return.toLocaleString()}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                ${item.expected_monthly_return.toLocaleString()}/mo
-                              </p>
+                              {/* Show actual payment calculations if available */}
+                              {item.payment_amount ? (
+                                <>
+                                  <p className="font-medium text-green-600">
+                                    ${item.payment_amount.toLocaleString()}/mo
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    ${item.total_interest?.toLocaleString() || '0'} total interest
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="font-medium text-green-600">
+                                    ${item.expected_annual_return.toLocaleString()}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    ${item.expected_monthly_return.toLocaleString()}/mo
+                                  </p>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell>

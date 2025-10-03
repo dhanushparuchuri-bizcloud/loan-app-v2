@@ -175,7 +175,12 @@ export default function LoanDetailsPage() {
                       <Clock className="h-4 w-4" />
                       <span className="text-sm">Term</span>
                     </div>
-                    <p className="text-xl font-semibold">{loan.term}</p>
+                    <p className="text-xl font-semibold">
+                      {loan.maturity_terms ? 
+                        `${loan.maturity_terms.payment_frequency} for ${loan.maturity_terms.term_length} months` : 
+                        (loan.term || 'N/A')
+                      }
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -192,6 +197,45 @@ export default function LoanDetailsPage() {
                   <h3 className="font-semibold mb-2">Description</h3>
                   <p className="text-muted-foreground">{loan.description}</p>
                 </div>
+
+                {/* Business Entity Information */}
+                {loan.purpose === "Business" && loan.entity_name && (
+                  <>
+                    <Separator />
+                    <div>
+                      <h3 className="font-semibold mb-4 flex items-center gap-2">
+                        🏢 Business Entity Information
+                      </h3>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <div className="text-sm text-muted-foreground">Entity Name</div>
+                          <p className="font-medium">{loan.entity_name}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-sm text-muted-foreground">Entity Type</div>
+                          <p>{loan.entity_type}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-sm text-muted-foreground">Tax ID / EIN</div>
+                          <p>{loan.entity_tax_id || 'Not provided'}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-sm text-muted-foreground">Borrower's Role</div>
+                          <p>{loan.borrower_relationship}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                          <div className="text-sm text-blue-700">
+                            <p className="font-medium">Business Loan</p>
+                            <p>This loan is for business purposes. The individual borrower remains personally liable for repayment.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <Separator />
 
@@ -225,6 +269,38 @@ export default function LoanDetailsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Maturity Terms */}
+            {loan.maturity_terms && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Maturity Terms
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <span className="text-sm text-muted-foreground">Start Date</span>
+                      <p className="font-semibold">{new Date(loan.maturity_terms.start_date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-sm text-muted-foreground">Maturity Date</span>
+                      <p className="font-semibold">{new Date(loan.maturity_terms.maturity_date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-sm text-muted-foreground">Payment Frequency</span>
+                      <p className="font-semibold">{loan.maturity_terms.payment_frequency}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <span className="text-sm text-muted-foreground">Total Payments</span>
+                      <p className="font-semibold">{loan.maturity_terms.total_payments} payments</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Lenders - Only shown to borrowers for privacy */}
             {isBorrower && (
@@ -310,6 +386,88 @@ export default function LoanDetailsPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Payment Schedule - Only shown to borrowers */}
+            {isBorrower && loan.borrower_payment_details && loan.borrower_payment_details.payment_dates && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Payment Schedule & Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Summary */}
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <span className="text-sm text-muted-foreground">Payment Per Period</span>
+                        <p className="font-bold text-lg">${loan.borrower_payment_details.total_payment_amount.toLocaleString()}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <span className="text-sm text-muted-foreground">Payment Frequency</span>
+                        <p className="font-semibold">{loan.borrower_payment_details.payment_frequency}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <span className="text-sm text-muted-foreground">Total Payments</span>
+                        <p className="font-semibold">{loan.borrower_payment_details.total_payments} payments</p>
+                      </div>
+                    </div>
+
+                    {/* Lender Payment Breakdown */}
+                    {loan.borrower_payment_details.lender_payments && loan.borrower_payment_details.lender_payments.length > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="font-semibold">Payment Distribution per {loan.borrower_payment_details.payment_frequency}:</h4>
+                        <div className="space-y-2">
+                          {loan.borrower_payment_details.lender_payments.map((lender, index) => (
+                            <div key={index} className="flex justify-between items-center p-3 bg-muted/50 rounded">
+                              <div>
+                                <p className="font-medium">{lender.lender_name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Funded: ${lender.contribution_amount.toLocaleString()} • Status: {lender.status}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold text-lg">${lender.payment_amount.toLocaleString()}</p>
+                                <p className="text-sm text-muted-foreground">per payment</p>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="border-t pt-2 flex justify-between items-center font-semibold">
+                            <span>Total Per Payment:</span>
+                            <span className="text-lg">${loan.borrower_payment_details.total_payment_amount.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Payment Schedule */}
+                    <div className="space-y-3">
+                      <h4 className="font-semibold">Payment Schedule:</h4>
+                      <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-4">
+                        {loan.borrower_payment_details.payment_dates.map((date, index) => (
+                          <div key={index} className="p-3 bg-muted rounded text-center">
+                            <p className="text-sm text-muted-foreground">Payment {index + 1}</p>
+                            <p className="font-medium">{new Date(date).toLocaleDateString()}</p>
+                            <p className="font-semibold text-primary">${loan.borrower_payment_details.total_payment_amount.toLocaleString()}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Disclaimer */}
+                    {loan.borrower_payment_details.disclaimer && (
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-sm">
+                          {loan.borrower_payment_details.disclaimer}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -347,12 +505,34 @@ export default function LoanDetailsPage() {
                     <span className="text-sm text-muted-foreground">Your Contribution</span>
                     <span className="font-bold text-lg">${userParticipation.contribution_amount.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Expected Return</span>
-                    <span className="font-semibold text-green-600">
-                      ${((userParticipation.contribution_amount * loan.interest_rate) / 100).toLocaleString()}
-                    </span>
-                  </div>
+                  
+                  {userParticipation.payment_amount && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Monthly Payment</span>
+                      <span className="font-semibold text-blue-600">
+                        ${userParticipation.payment_amount.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {userParticipation.total_interest && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Total Interest</span>
+                      <span className="font-semibold text-green-600">
+                        ${userParticipation.total_interest.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {userParticipation.total_repayment && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Total Repayment</span>
+                      <span className="font-bold text-lg">
+                        ${userParticipation.total_repayment.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Status</span>
                     <Badge
@@ -366,6 +546,27 @@ export default function LoanDetailsPage() {
                       {userParticipation.status}
                     </Badge>
                   </div>
+                  
+                  {loan.maturity_terms && (
+                    <div className="space-y-2">
+                      <span className="text-sm text-muted-foreground">Your Payment Schedule</span>
+                      <p className="text-sm">
+                        {userParticipation.payment_amount ? `$${userParticipation.payment_amount.toLocaleString()}` : 'TBD'} per {loan.maturity_terms.payment_frequency.toLowerCase()} payment
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {loan.maturity_terms.total_payments} payments from {new Date(loan.maturity_terms.start_date).toLocaleDateString()} to {new Date(loan.maturity_terms.maturity_date).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {userParticipation.disclaimer && (
+                    <Alert className="mt-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        {userParticipation.disclaimer}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </CardContent>
               </Card>
             )}

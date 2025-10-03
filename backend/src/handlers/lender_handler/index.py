@@ -96,13 +96,25 @@ def handle_get_pending_invitations(event: Dict[str, Any]) -> Dict[str, Any]:
         
         logger.info(f"Getting pending invitations for lender: {user.user_id}")
         
-        # Query by lender_id using LenderIndex, then filter by status
-        all_participants = DynamoDBHelper.query_items(
+        # Query by actual lender_id using LenderIndex
+        actual_participants = DynamoDBHelper.query_items(
             TABLE_NAMES['LOAN_PARTICIPANTS'],
             'lender_id = :lender_id',
             {':lender_id': user.user_id},
             'LenderIndex'
         )
+        
+        # Also query by pending:email format using LenderIndex
+        pending_lender_id = f"pending:{user.email}"
+        pending_participants = DynamoDBHelper.query_items(
+            TABLE_NAMES['LOAN_PARTICIPANTS'],
+            'lender_id = :pending_lender_id',
+            {':pending_lender_id': pending_lender_id},
+            'LenderIndex'
+        )
+        
+        # Combine both sets of participants
+        all_participants = actual_participants + pending_participants
         
         # Filter for pending participants
         participants = [
@@ -126,6 +138,26 @@ def handle_get_pending_invitations(event: Dict[str, Any]) -> Dict[str, Any]:
                 borrower = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': loan['borrower_id']})
                 borrower_name = borrower['name'] if borrower else 'Unknown'
                 
+                # Handle backward compatibility for maturity terms
+                if 'start_date' in loan:
+                    # New format with enhanced maturity terms
+                    maturity_terms = {
+                        'start_date': loan['start_date'],
+                        'payment_frequency': loan['payment_frequency'],
+                        'term_length': loan['term_length'],
+                        'maturity_date': loan['maturity_date'],
+                        'total_payments': loan['total_payments']
+                    }
+                else:
+                    # Old format - convert on the fly
+                    maturity_terms = {
+                        'start_date': loan['created_at'][:10],
+                        'payment_frequency': loan.get('term', 'Monthly'),
+                        'term_length': 12,
+                        'maturity_date': loan['created_at'][:10],
+                        'total_payments': 12
+                    }
+                
                 # Create invitation object
                 invitation = {
                     'loan_id': participant['loan_id'],
@@ -133,7 +165,7 @@ def handle_get_pending_invitations(event: Dict[str, Any]) -> Dict[str, Any]:
                     'loan_purpose': loan['purpose'],
                     'loan_description': loan['description'],
                     'interest_rate': float(loan['interest_rate']),
-                    'term': loan['term'],
+                    'maturity_terms': maturity_terms,
                     'borrower_name': borrower_name,
                     'contribution_amount': float(participant['contribution_amount']),
                     'invited_at': participant['invited_at'],

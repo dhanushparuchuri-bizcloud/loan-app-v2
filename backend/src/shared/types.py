@@ -21,12 +21,35 @@ class User:
 
 
 @dataclass
+class MaturityTerms:
+    start_date: str
+    payment_frequency: Literal['Weekly', 'Bi-Weekly', 'Monthly', 'Quarterly', 'Annually']
+    term_length: int  # months
+    maturity_date: str
+    total_payments: int
+
+
+@dataclass
+class LenderPaymentDetails:
+    contribution_amount: float
+    payment_amount: float
+    total_interest: float
+    total_repayment: float
+    payment_schedule: Optional[List[str]] = None
+
+
+@dataclass
 class Loan:
     loan_id: str
     borrower_id: str
     amount: float
     interest_rate: float
-    term: str
+    # Enhanced maturity terms (replaces simple 'term' field)
+    start_date: str
+    payment_frequency: Literal['Weekly', 'Bi-Weekly', 'Monthly', 'Quarterly', 'Annually']
+    term_length: int  # months
+    maturity_date: str
+    total_payments: int
     purpose: str
     description: str
     status: Literal['PENDING', 'ACTIVE', 'COMPLETED']
@@ -88,7 +111,8 @@ class LoanDetails:
     borrower_id: str
     amount: float
     interest_rate: float
-    term: str
+    # Enhanced maturity terms
+    maturity_terms: MaturityTerms
     purpose: str
     description: str
     status: str
@@ -97,6 +121,8 @@ class LoanDetails:
     borrower_name: str
     participants: List[Dict[str, Any]]
     funding_progress: Dict[str, Any]
+    # Lender-specific payment details (only for lender requests)
+    user_participation: Optional[LenderPaymentDetails] = None
 
 
 @dataclass
@@ -106,7 +132,7 @@ class LenderInvitation:
     loan_purpose: str
     loan_description: str
     interest_rate: float
-    term: str
+    maturity_terms: MaturityTerms
     borrower_name: str
     contribution_amount: float
     invited_at: str
@@ -224,3 +250,11 @@ class UserType:
 class AccountType:
     CHECKING = 'checking'
     SAVINGS = 'savings'
+
+
+class PaymentFrequency:
+    WEEKLY = 'Weekly'
+    BI_WEEKLY = 'Bi-Weekly'
+    MONTHLY = 'Monthly'
+    QUARTERLY = 'Quarterly'
+    ANNUALLY = 'Annually'

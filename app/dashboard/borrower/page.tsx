@@ -142,6 +142,7 @@ export default function BorrowerDashboard() {
                       <TableRow>
                         <TableHead>Amount</TableHead>
                         <TableHead>Interest Rate</TableHead>
+                        <TableHead>Purpose</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Funded</TableHead>
                         <TableHead>Actions</TableHead>
@@ -152,6 +153,18 @@ export default function BorrowerDashboard() {
                         <TableRow key={loan.loan_id}>
                           <TableCell className="font-medium">${loan.amount.toLocaleString()}</TableCell>
                           <TableCell>{loan.interest_rate}%</TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                {loan.purpose === "Business" && "🏢"} {loan.purpose}
+                              </div>
+                              {loan.purpose === "Business" && loan.entity_name && (
+                                <div className="text-xs text-muted-foreground">
+                                  {loan.entity_name} ({loan.entity_type})
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>{getStatusBadge(loan.status)}</TableCell>
                           <TableCell>
                             ${loan.total_funded.toLocaleString()} / ${loan.amount.toLocaleString()}

@@ -355,8 +355,8 @@ def update_participant_records(email: str, user_id: str, updated_at: str) -> Non
         # Note: This is not the most efficient approach, but it's simple and works for MVP
         all_participants = DynamoDBHelper.scan_items(
             TABLE_NAMES['LOAN_PARTICIPANTS'],
-            'lender_id = :pending_lender_id',
-            {':pending_lender_id': pending_lender_id}
+            filter_expression='lender_id = :pending_lender_id',
+            expression_attribute_values={':pending_lender_id': pending_lender_id}
         )
         
         logger.info(f"Found {len(all_participants)} participant records to update for {email}")

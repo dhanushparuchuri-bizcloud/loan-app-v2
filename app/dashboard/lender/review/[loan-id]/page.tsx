@@ -239,8 +239,8 @@ export default function LoanReviewPage() {
                     <p className="text-2xl font-bold text-green-600">{loan.interest_rate}%</p>
                   </div>
                   <div>
-                    <Label>Maturity Date</Label>
-                    <p className="text-lg">{loan.term}</p>
+                    <Label>Payment Terms</Label>
+                    <p className="text-lg">{loan.maturity_terms?.payment_frequency || loan.term} for {loan.maturity_terms?.term_length || 12} months</p>
                   </div>
                   <div>
                     <Label>Purpose</Label>
@@ -354,12 +354,12 @@ export default function LoanReviewPage() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="bank-name">Bank Name</Label>
+                        <Label htmlFor="bank-name">Bank Name *</Label>
                         <Select
                           value={achDetails.bank_name}
                           onValueChange={(value) => setACHDetails({ ...achDetails, bank_name: value })}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className={!achDetails.bank_name ? "border-red-300" : ""}>
                             <SelectValue placeholder="Select your bank" />
                           </SelectTrigger>
                           <SelectContent>
@@ -371,37 +371,59 @@ export default function LoanReviewPage() {
                             <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
+                        {!achDetails.bank_name && (
+                          <p className="text-sm text-red-500">Please select your bank</p>
+                        )}
+                        {achDetails.bank_name && (
+                          <p className="text-sm text-green-600">✓ Bank selected</p>
+                        )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Account Type</Label>
+                        <Label>Account Type *</Label>
                         <div className="flex gap-4">
-                          <label className="flex items-center space-x-2">
+                          <label className={`flex items-center space-x-2 p-2 border rounded cursor-pointer transition-colors ${
+                            achDetails.account_type === "Checking" 
+                              ? "border-primary bg-primary/10" 
+                              : "border-muted hover:border-primary/50"
+                          }`}>
                             <input
                               type="radio"
                               name="account_type"
                               value="Checking"
                               checked={achDetails.account_type === "Checking"}
                               onChange={(e) => setACHDetails({ ...achDetails, account_type: e.target.value })}
+                              className="text-primary"
                             />
                             <span>Checking</span>
                           </label>
-                          <label className="flex items-center space-x-2">
+                          <label className={`flex items-center space-x-2 p-2 border rounded cursor-pointer transition-colors ${
+                            achDetails.account_type === "Savings" 
+                              ? "border-primary bg-primary/10" 
+                              : "border-muted hover:border-primary/50"
+                          }`}>
                             <input
                               type="radio"
                               name="account_type"
                               value="Savings"
                               checked={achDetails.account_type === "Savings"}
                               onChange={(e) => setACHDetails({ ...achDetails, account_type: e.target.value })}
+                              className="text-primary"
                             />
                             <span>Savings</span>
                           </label>
                         </div>
+                        {!achDetails.account_type && (
+                          <p className="text-sm text-muted-foreground">Please select an account type</p>
+                        )}
+                        {achDetails.account_type && (
+                          <p className="text-sm text-green-600">✓ Account type selected</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="routing-number">Routing Number (9 digits)</Label>
+                        <Label htmlFor="routing-number">Routing Number *</Label>
                         <Input
                           id="routing-number"
                           value={achDetails.routing_number}
@@ -411,7 +433,7 @@ export default function LoanReviewPage() {
                               routing_number: formatRoutingNumber(e.target.value),
                             })
                           }
-                          placeholder="123456789"
+                          placeholder="123456789 (9 digits)"
                           maxLength={9}
                           required
                           className={achDetails.routing_number.length > 0 && achDetails.routing_number.length !== 9 ? "border-red-500" : ""}
@@ -419,16 +441,26 @@ export default function LoanReviewPage() {
                         {achDetails.routing_number.length > 0 && achDetails.routing_number.length !== 9 && (
                           <p className="text-sm text-red-500">Routing number must be exactly 9 digits</p>
                         )}
+                        {achDetails.routing_number.length === 9 && (
+                          <p className="text-sm text-green-600">✓ Valid routing number</p>
+                        )}
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="account-number">Account Number</Label>
+                        <Label htmlFor="account-number">Account Number *</Label>
                         <Input
                           id="account-number"
                           value={achDetails.account_number}
                           onChange={(e) => setACHDetails({ ...achDetails, account_number: formatAccountNumber(e.target.value) })}
-                          placeholder="Account number"
+                          placeholder="Account number (4-20 digits)"
                           required
+                          className={achDetails.account_number.length > 0 && achDetails.account_number.length < 4 ? "border-red-500" : ""}
                         />
+                        {achDetails.account_number.length > 0 && achDetails.account_number.length < 4 && (
+                          <p className="text-sm text-red-500">Account number must be at least 4 digits</p>
+                        )}
+                        {achDetails.account_number.length >= 4 && (
+                          <p className="text-sm text-green-600">✓ Valid account number</p>
+                        )}
                       </div>
                     </div>
 
@@ -455,7 +487,20 @@ export default function LoanReviewPage() {
                     </div>
 
                     <div className="flex gap-4">
-                      <Button type="submit" disabled={!agreedToTerms || isSubmitting} className="flex-1">
+                      <Button 
+                        type="submit" 
+                        disabled={
+                          !agreedToTerms || 
+                          isSubmitting || 
+                          !achDetails.bank_name.trim() ||
+                          !achDetails.account_type ||
+                          !achDetails.routing_number ||
+                          achDetails.routing_number.length !== 9 ||
+                          !achDetails.account_number ||
+                          achDetails.account_number.length < 4
+                        } 
+                        className="flex-1"
+                      >
                         {isSubmitting ? "Processing..." : "Accept Loan"}
                         <Check className="ml-2 h-4 w-4" />
                       </Button>
@@ -471,12 +516,12 @@ export default function LoanReviewPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Your Contribution */}
+            {/* Your Investment Details */}
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-primary" />
-                  Your Contribution
+                  Your Investment
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -486,22 +531,71 @@ export default function LoanReviewPage() {
                     ${userParticipation.contribution_amount?.toLocaleString()}
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Expected Annual Return:</span>
-                    <span className="font-medium text-green-600">${expectedAnnualReturn.toLocaleString()}</span>
+                
+                {/* Enhanced Payment Calculations */}
+                {userParticipation.payment_amount && (
+                  <div className="space-y-3 pt-2 border-t">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Monthly Payment:</span>
+                      <span className="font-bold text-green-600">
+                        ${userParticipation.payment_amount?.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Interest:</span>
+                      <span className="font-medium text-green-600">
+                        ${userParticipation.total_interest?.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Repayment:</span>
+                      <span className="font-bold">
+                        ${userParticipation.total_repayment?.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Payment Frequency:</span>
+                      <span className="font-medium">
+                        {loan.maturity_terms?.payment_frequency || 'Monthly'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Payments:</span>
+                      <span className="font-medium">
+                        {loan.maturity_terms?.total_payments || 12}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Monthly Income:</span>
-                    <span className="font-medium">${expectedMonthlyReturn.toLocaleString()}</span>
+                )}
+                
+                {/* Fallback for old loans without payment calculations */}
+                {!userParticipation.payment_amount && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Expected Annual Return:</span>
+                      <span className="font-medium text-green-600">${expectedAnnualReturn.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Monthly Income:</span>
+                      <span className="font-medium">${expectedMonthlyReturn.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Return:</span>
+                      <span className="font-medium">
+                        ${((userParticipation?.contribution_amount || 0) + expectedAnnualReturn).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Total Return:</span>
-                    <span className="font-medium">
-                      ${((userParticipation?.contribution_amount || 0) + expectedAnnualReturn).toLocaleString()}
-                    </span>
+                )}
+                
+                {/* Disclaimer */}
+                {userParticipation.disclaimer && (
+                  <div className="pt-3 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      ⚠️ {userParticipation.disclaimer}
+                    </p>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 

@@ -15,12 +15,24 @@ import { useAuth } from "@/lib/auth-context"
 import { apiClient } from "@/lib/api-client"
 import { ArrowLeft, ArrowRight, Check, X, Plus } from "lucide-react"
 
+interface EntityDetails {
+  entity_name: string
+  entity_type: string
+  entity_tax_id: string
+  borrower_relationship: string
+}
+
 interface LoanDetails {
   amount: number
   interestRate: number
-  term: string
+  maturityTerms: {
+    start_date: string
+    payment_frequency: string
+    term_length: number
+  }
   purpose: string
   description: string
+  entityDetails: EntityDetails
 }
 
 interface SelectedLender {
@@ -35,9 +47,19 @@ export default function CreateLoanPage() {
   const [loanDetails, setLoanDetails] = useState<LoanDetails>({
     amount: 0,
     interestRate: 5,
-    term: "",
+    maturityTerms: {
+      start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+      payment_frequency: "Monthly",
+      term_length: 12
+    },
     purpose: "",
     description: "",
+    entityDetails: {
+      entity_name: "",
+      entity_type: "",
+      entity_tax_id: "",
+      borrower_relationship: ""
+    }
   })
   const [selectedLenders, setSelectedLenders] = useState<SelectedLender[]>([])
   const [newLenderName, setNewLenderName] = useState("")
@@ -101,17 +123,37 @@ export default function CreateLoanPage() {
       totalAssigned: totalAssigned
     })
 
+    // Validate description length
+    if (!loanDetails.description || loanDetails.description.trim().length < 10) {
+      alert('Description must be at least 10 characters long')
+      return
+    }
+
+    // Validate business entity details if needed
+    if (loanDetails.purpose === "Business" && (!loanDetails.entityDetails.entity_name || !loanDetails.entityDetails.entity_type || !loanDetails.entityDetails.borrower_relationship)) {
+      alert('Please fill in all required business entity information')
+      return
+    }
+
     try {
       const loanData = {
         amount: loanDetails.amount,
         purpose: loanDetails.purpose,
         description: loanDetails.description,
         interest_rate: loanDetails.interestRate,
-        term: loanDetails.term,
+        maturity_terms: loanDetails.maturityTerms,
         lenders: selectedLenders.map(lender => ({
           email: lender.email,
           contribution_amount: lender.amount
-        }))
+        })),
+        ...(loanDetails.purpose === "Business" && loanDetails.entityDetails.entity_name && {
+          entity_details: {
+            entity_name: loanDetails.entityDetails.entity_name,
+            entity_type: loanDetails.entityDetails.entity_type,
+            entity_tax_id: loanDetails.entityDetails.entity_tax_id || null,
+            borrower_relationship: loanDetails.entityDetails.borrower_relationship
+          }
+        })
       }
 
       console.log('[CreateLoan] Sending loan data:', loanData)
@@ -200,21 +242,62 @@ export default function CreateLoanPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="term">Maturity Date</Label>
+                    <Label htmlFor="start-date">Payment Start Date</Label>
+                    <Input
+                      id="start-date"
+                      type="date"
+                      value={loanDetails.maturityTerms.start_date}
+                      onChange={(e) =>
+                        setLoanDetails({
+                          ...loanDetails,
+                          maturityTerms: { ...loanDetails.maturityTerms, start_date: e.target.value }
+                        })
+                      }
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="payment-frequency">Payment Frequency</Label>
                     <Select
-                      value={loanDetails.term}
-                      onValueChange={(value) => setLoanDetails({ ...loanDetails, term: value })}
+                      value={loanDetails.maturityTerms.payment_frequency}
+                      onValueChange={(value) => 
+                        setLoanDetails({
+                          ...loanDetails,
+                          maturityTerms: { ...loanDetails.maturityTerms, payment_frequency: value }
+                        })
+                      }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select term" />
+                        <SelectValue placeholder="Select frequency" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Weekly">Weekly</SelectItem>
+                        <SelectItem value="Bi-Weekly">Bi-Weekly</SelectItem>
                         <SelectItem value="Monthly">Monthly</SelectItem>
                         <SelectItem value="Quarterly">Quarterly</SelectItem>
                         <SelectItem value="Annually">Annually</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="term-length">Term Length (months)</Label>
+                    <Input
+                      id="term-length"
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={loanDetails.maturityTerms.term_length || ""}
+                      onChange={(e) =>
+                        setLoanDetails({
+                          ...loanDetails,
+                          maturityTerms: { ...loanDetails.maturityTerms, term_length: Number(e.target.value) }
+                        })
+                      }
+                      placeholder="12"
+                    />
                   </div>
                 </div>
 
@@ -258,7 +341,7 @@ export default function CreateLoanPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description">Description *</Label>
                   <Textarea
                     id="description"
                     value={loanDetails.description}
@@ -268,12 +351,127 @@ export default function CreateLoanPage() {
                         description: e.target.value,
                       })
                     }
-                    placeholder="Describe how you plan to use these funds..."
-                    maxLength={500}
+                    placeholder="Describe how you plan to use these funds (minimum 10 characters)..."
+                    maxLength={1000}
                     rows={4}
+                    className={loanDetails.description.length > 0 && loanDetails.description.length < 10 ? "border-red-500" : ""}
                   />
-                  <p className="text-sm text-muted-foreground">{loanDetails.description.length}/500 characters</p>
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm">
+                      {loanDetails.description.length < 10 && loanDetails.description.length > 0 ? (
+                        <span className="text-red-500">
+                          Need {10 - loanDetails.description.length} more characters (minimum 10)
+                        </span>
+                      ) : loanDetails.description.length >= 10 ? (
+                        <span className="text-green-600">✓ Valid description</span>
+                      ) : (
+                        <span className="text-muted-foreground">Minimum 10 characters required</span>
+                      )}
+                    </div>
+                    <span className="text-sm text-muted-foreground">{loanDetails.description.length}/1000 characters</span>
+                  </div>
                 </div>
+
+                {/* Business Entity Details */}
+                {loanDetails.purpose === "Business" && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/20">
+                    <h4 className="font-semibold text-lg">🏢 Business Entity Information</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Required for business loans. You remain personally liable for repayment.
+                    </p>
+                    
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="entity-name">Entity Name *</Label>
+                        <Input
+                          id="entity-name"
+                          value={loanDetails.entityDetails.entity_name}
+                          onChange={(e) =>
+                            setLoanDetails({
+                              ...loanDetails,
+                              entityDetails: {
+                                ...loanDetails.entityDetails,
+                                entity_name: e.target.value,
+                              }
+                            })
+                          }
+                          placeholder="ABC Manufacturing LLC"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="entity-type">Entity Type *</Label>
+                        <Select
+                          value={loanDetails.entityDetails.entity_type}
+                          onValueChange={(value) => 
+                            setLoanDetails({
+                              ...loanDetails,
+                              entityDetails: {
+                                ...loanDetails.entityDetails,
+                                entity_type: value,
+                              }
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select entity type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="LLC">LLC</SelectItem>
+                            <SelectItem value="Corporation">Corporation</SelectItem>
+                            <SelectItem value="Partnership">Partnership</SelectItem>
+                            <SelectItem value="Sole Proprietorship">Sole Proprietorship</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="entity-tax-id">Entity Tax ID / EIN</Label>
+                        <Input
+                          id="entity-tax-id"
+                          value={loanDetails.entityDetails.entity_tax_id}
+                          onChange={(e) =>
+                            setLoanDetails({
+                              ...loanDetails,
+                              entityDetails: {
+                                ...loanDetails.entityDetails,
+                                entity_tax_id: e.target.value,
+                              }
+                            })
+                          }
+                          placeholder="12-3456789 (optional)"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="borrower-relationship">Your Role in Entity *</Label>
+                        <Select
+                          value={loanDetails.entityDetails.borrower_relationship}
+                          onValueChange={(value) => 
+                            setLoanDetails({
+                              ...loanDetails,
+                              entityDetails: {
+                                ...loanDetails.entityDetails,
+                                borrower_relationship: value,
+                              }
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select your role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Owner">Owner</SelectItem>
+                            <SelectItem value="Officer">Officer</SelectItem>
+                            <SelectItem value="Manager">Manager</SelectItem>
+                            <SelectItem value="Partner">Partner</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -407,8 +605,8 @@ export default function CreateLoanPage() {
                         <p className="text-2xl font-bold">{loanDetails.interestRate}%</p>
                       </div>
                       <div>
-                        <Label>Maturity Date</Label>
-                        <p className="text-lg">{loanDetails.term}</p>
+                        <Label>Payment Terms</Label>
+                        <p className="text-lg">{loanDetails.maturityTerms.payment_frequency} for {loanDetails.maturityTerms.term_length} months</p>
                       </div>
                       <div>
                         <Label>Purpose</Label>
@@ -416,11 +614,49 @@ export default function CreateLoanPage() {
                       </div>
                     </div>
                     <div>
+                      <Label>Payment Start Date</Label>
+                      <p className="text-lg">{new Date(loanDetails.maturityTerms.start_date).toLocaleDateString()}</p>
+                    </div>
+                    <div className="md:col-span-2">
                       <Label>Description</Label>
                       <p className="text-muted-foreground">{loanDetails.description}</p>
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Entity Details Review */}
+                {loanDetails.purpose === "Business" && loanDetails.entityDetails.entity_name && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>🏢 Business Entity Information</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <Label>Entity Name</Label>
+                          <p className="font-medium">{loanDetails.entityDetails.entity_name}</p>
+                        </div>
+                        <div>
+                          <Label>Entity Type</Label>
+                          <p>{loanDetails.entityDetails.entity_type}</p>
+                        </div>
+                        <div>
+                          <Label>Tax ID / EIN</Label>
+                          <p>{loanDetails.entityDetails.entity_tax_id || 'Not provided'}</p>
+                        </div>
+                        <div>
+                          <Label>Your Role</Label>
+                          <p>{loanDetails.entityDetails.borrower_relationship}</p>
+                        </div>
+                      </div>
+                      <div className="mt-4 p-3 bg-blue-50 rounded">
+                        <p className="text-sm text-blue-700">
+                          ℹ️ This loan is for business purposes. You remain personally liable for repayment.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Card>
                   <CardHeader>
@@ -454,7 +690,19 @@ export default function CreateLoanPage() {
                 <Button
                   onClick={handleNext}
                   disabled={
-                    (currentStep === 1 && (!loanDetails.amount || !loanDetails.term || !loanDetails.purpose)) ||
+                    (currentStep === 1 && (
+                      !loanDetails.amount || 
+                      !loanDetails.maturityTerms.payment_frequency || 
+                      !loanDetails.maturityTerms.term_length || 
+                      !loanDetails.purpose ||
+                      !loanDetails.description ||
+                      loanDetails.description.length < 10 ||
+                      (loanDetails.purpose === "Business" && (
+                        !loanDetails.entityDetails.entity_name ||
+                        !loanDetails.entityDetails.entity_type ||
+                        !loanDetails.entityDetails.borrower_relationship
+                      ))
+                    )) ||
                     (currentStep === 2 && !isAmountValid)
                   }
                 >

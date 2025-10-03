@@ -9,6 +9,7 @@ from decimal import Decimal
 # Import shared modules
 from shared.dynamodb_client import DynamoDBHelper, TABLE_NAMES
 from shared.jwt_auth import JWTAuth, AuthenticatedUser
+from shared.response_helper import ResponseHelper
 # Constants to avoid import conflicts with Python's built-in types module
 class UserStatus:
     ACTIVE = 'ACTIVE'
@@ -336,6 +337,26 @@ def handle_get_lender_portfolio(event: Dict[str, Any], context: Any, user: Authe
                 
                 borrower_name = borrower['name'] if borrower else 'Unknown Borrower'
                 
+                # Handle backward compatibility for maturity terms
+                if 'start_date' in loan:
+                    # New format with enhanced maturity terms
+                    maturity_terms = {
+                        'start_date': loan['start_date'],
+                        'payment_frequency': loan['payment_frequency'],
+                        'term_length': loan['term_length'],
+                        'maturity_date': loan['maturity_date'],
+                        'total_payments': loan['total_payments']
+                    }
+                else:
+                    # Old format - convert on the fly
+                    maturity_terms = {
+                        'start_date': loan['created_at'][:10],
+                        'payment_frequency': loan.get('term', 'Monthly'),
+                        'term_length': 12,
+                        'maturity_date': loan['created_at'][:10],
+                        'total_payments': 12
+                    }
+                
                 # Calculate expected returns
                 contribution_amount = float(participation['contribution_amount'])
                 interest_rate = float(loan['interest_rate'])
@@ -349,7 +370,7 @@ def handle_get_lender_portfolio(event: Dict[str, Any], context: Any, user: Authe
                     'loan_amount': float(loan['amount']),
                     'contribution_amount': contribution_amount,
                     'interest_rate': interest_rate,
-                    'term': loan['term'],
+                    'maturity_terms': maturity_terms,
                     'purpose': loan['purpose'],
                     'description': loan['description'],
                     'loan_status': loan['status'],
@@ -389,17 +410,15 @@ def handle_get_lender_portfolio(event: Dict[str, Any], context: Any, user: Authe
             }
         }
         
-        return JWTAuth.create_response(200, {
-            'success': True,
-            'data': response_data
-        })
+        return ResponseHelper.success_response(response_data)
         
     except Exception as e:
         logger.error(f"Lender portfolio endpoint error: {e}")
-        return JWTAuth.create_response(500, {
-            'error': 'INTERNAL_ERROR',
-            'message': 'Failed to retrieve lender portfolio'
-        })
+        return ResponseHelper.error_response(
+            500, 
+            'INTERNAL_ERROR',
+            'Failed to retrieve lender portfolio'
+        )
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

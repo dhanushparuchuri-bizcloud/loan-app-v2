@@ -74,6 +74,46 @@ export interface DashboardResponse {
   message?: string
 }
 
+// Payment Calculator interfaces
+export interface MaturityTerms {
+  start_date: string
+  payment_frequency: string
+  term_length: number
+  maturity_date: string
+  total_payments: number
+}
+
+export interface LenderPaymentDetails {
+  lender_id: string
+  lender_name: string
+  lender_email: string
+  contribution_amount: number
+  payment_amount: number
+  status: string
+  ach_details?: ACHDetails
+}
+
+export interface BorrowerPaymentDetails {
+  total_payment_amount: number
+  payment_frequency: string
+  total_payments: number
+  payment_dates: string[]
+  lender_payments: LenderPaymentDetails[]
+  disclaimer: string
+}
+
+export interface UserParticipation {
+  lender_id: string
+  contribution_amount: number
+  status: string
+  invited_at: string
+  responded_at?: string | null
+  payment_amount: number
+  total_interest: number
+  total_repayment: number
+  disclaimer: string
+}
+
 // Loan interfaces
 export interface FundingProgress {
   total_amount: number
@@ -107,15 +147,22 @@ export interface Loan {
   purpose: string
   description: string
   interest_rate: number
-  term: string
+  maturity_terms: MaturityTerms
   status: string
   created_at: string
   total_funded: number
   // Privacy protection: participants array empty for lenders
   participants: LoanParticipant[]
-  // New field: lender's own participation data
-  user_participation?: LoanParticipant | null
+  // Enhanced participation data with payment calculations
+  user_participation?: UserParticipation | null
+  // Borrower payment details (only for borrowers)
+  borrower_payment_details?: BorrowerPaymentDetails | null
   funding_progress: FundingProgress
+  // Entity details for business loans
+  entity_name?: string | null
+  entity_type?: string | null
+  entity_tax_id?: string | null
+  borrower_relationship?: string | null
 }
 
 export interface LoanSummary {
@@ -140,7 +187,7 @@ export interface CreateLoanResponse {
     borrower_id: string
     amount: number
     interest_rate: number
-    term: string
+    maturity_terms: MaturityTerms
     purpose: string
     description: string
     status: string
@@ -180,11 +227,21 @@ export interface CreateLoanRequest {
   purpose: string
   description: string
   interest_rate: number
-  term: string
+  maturity_terms: {
+    start_date: string
+    payment_frequency: string
+    term_length: number
+  }
   lenders: Array<{
     email: string
     contribution_amount: number
   }>
+  entity_details?: {
+    entity_name: string
+    entity_type: string
+    entity_tax_id?: string | null
+    borrower_relationship: string
+  }
 }
 
 export interface AcceptLoanRequest {
@@ -234,6 +291,11 @@ export interface PortfolioItem {
   expected_annual_return: number
   expected_monthly_return: number
   created_at: string
+  // New payment calculation fields
+  payment_amount?: number
+  total_interest?: number
+  total_repayment?: number
+  maturity_terms?: MaturityTerms
 }
 
 export interface LenderPortfolioResponse {

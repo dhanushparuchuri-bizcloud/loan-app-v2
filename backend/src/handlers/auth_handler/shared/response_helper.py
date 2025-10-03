@@ -3,9 +3,17 @@ API response helper utilities.
 """
 import json
 import logging
+from decimal import Decimal
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def decimal_default(obj):
+    """JSON encoder function to handle Decimal types."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    raise TypeError
 
 
 class ResponseHelper:
@@ -41,7 +49,7 @@ class ResponseHelper:
         return {
             'statusCode': status_code,
             'headers': default_headers,
-            'body': json.dumps(body, default=str)
+            'body': json.dumps(body, default=decimal_default)
         }
     
     @staticmethod
