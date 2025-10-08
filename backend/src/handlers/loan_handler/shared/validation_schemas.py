@@ -42,10 +42,17 @@ class LoginUserRequest(BaseModel):
 
 
 # Loan validation models
+class EntityDetailsRequest(BaseModel):
+    entity_name: Optional[str] = Field(None, max_length=200, description="Business entity name")
+    entity_type: str = Field(..., description="Type of business entity")
+    entity_tax_id: Optional[str] = Field(None, max_length=50, description="Business tax ID")
+    borrower_relationship: str = Field(..., description="Borrower's relationship to entity")
+
+
 class LenderInviteRequest(BaseModel):
     email: EmailStr = Field(..., description="Lender's email address")
     contribution_amount: float = Field(..., gt=0, description="Lender's contribution amount")
-    
+
     @validator('email', pre=True)
     def validate_email_format(cls, v):
         if isinstance(v, str):
@@ -80,51 +87,25 @@ class MaturityTermsRequest(BaseModel):
             raise ValueError("Invalid date format. Use YYYY-MM-DD")
 
 
-class EntityDetails(BaseModel):
-    entity_name: Optional[str] = Field(None, min_length=1, max_length=200, description="Business entity name")
-    entity_type: Optional[str] = Field(None, description="Type of business entity")
-    entity_tax_id: Optional[str] = Field(None, max_length=50, description="Entity tax ID or EIN")
-    borrower_relationship: Optional[str] = Field(None, description="Borrower's relationship to the entity")
-    
-    @validator('entity_type')
-    def validate_entity_type(cls, v):
-        if v is not None:
-            valid_types = ['LLC', 'Corporation', 'Partnership', 'Sole Proprietorship']
-            if v not in valid_types:
-                raise ValueError(f"Entity type must be one of: {', '.join(valid_types)}")
-        return v
-    
-    @validator('borrower_relationship')
-    def validate_borrower_relationship(cls, v):
-        if v is not None:
-            valid_relationships = ['Owner', 'Officer', 'Manager', 'Partner']
-            if v not in valid_relationships:
-                raise ValueError(f"Borrower relationship must be one of: {', '.join(valid_relationships)}")
-        return v
-
-
 class CreateLoanRequest(BaseModel):
+    loan_name: str = Field(..., min_length=3, max_length=100, description="Friendly loan name/title")
     amount: float = Field(..., ge=1000, le=1000000, description="Loan amount")
     interest_rate: float = Field(..., ge=0.01, le=50, description="Interest rate percentage")
     maturity_terms: MaturityTermsRequest = Field(..., description="Maturity terms")
     purpose: str = Field(..., min_length=1, max_length=100, description="Loan purpose")
     description: str = Field(..., min_length=10, max_length=1000, description="Loan description")
-    lenders: List[LenderInviteRequest] = Field(..., min_items=1, description="List of lender invitations")
-    entity_details: Optional[EntityDetails] = Field(None, description="Business entity details (required when purpose is Business)")
+    entity_details: Optional[EntityDetailsRequest] = Field(None, description="Business entity details (optional)")
+    lenders: List[LenderInviteRequest] = Field(default_factory=list, description="List of lender invitations (can be empty for incremental funding)")
     
     @validator('lenders')
     def validate_contributions_sum(cls, v, values):
-        if 'amount' in values:
+        if 'amount' in values and v:  # Only validate if lenders provided
             total_contributions = sum(lender.contribution_amount for lender in v)
-            if abs(total_contributions - values['amount']) > 0.01:
-                raise ValueError(f"Total contributions ({total_contributions}) must equal loan amount ({values['amount']})")
-        return v
-    
-    @validator('entity_details')
-    def validate_entity_details_for_business(cls, v, values):
-        if 'purpose' in values and values['purpose'] == 'Business':
-            if v is None or not v.entity_name or not v.entity_type or not v.borrower_relationship:
-                raise ValueError("Entity name, type, and borrower relationship are required for business loans")
+            # Allow partial funding, but prevent over-funding
+            if total_contributions > values['amount']:
+                raise ValueError(
+                    f"Total contributions ({total_contributions}) cannot exceed loan amount ({values['amount']})"
+                )
         return v
 
 
@@ -301,7 +282,8 @@ __all__ = [
     'RegisterUserRequest',
     'LoginUserRequest',
     'CreateLoanRequest',
-    'EntityDetails',
+    'MaturityTermsRequest',
+    'EntityDetailsRequest',
     'LenderInviteRequest',
     'AcceptLoanRequest',
     'PaginationRequest',

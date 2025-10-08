@@ -141,6 +141,7 @@ export interface LoanParticipant {
 
 export interface Loan {
   loan_id: string
+  loan_name: string
   borrower_id: string
   borrower_name: string
   amount: number
@@ -167,6 +168,7 @@ export interface Loan {
 
 export interface LoanSummary {
   loan_id: string
+  loan_name: string
   amount: number
   interest_rate: number
   term: string
@@ -178,12 +180,20 @@ export interface LoanSummary {
   participant_count: number
   accepted_participants: number
   funding_progress: FundingProgress
+  participants?: Array<{
+    lender_id: string
+    lender_name?: string
+    lender_email?: string
+    contribution_amount: number
+    status: string
+  }>
 }
 
 export interface CreateLoanResponse {
   success: boolean
   loan: {
     loan_id: string
+    loan_name: string
     borrower_id: string
     amount: number
     interest_rate: number
@@ -223,6 +233,7 @@ export interface ACHDetails {
 }
 
 export interface CreateLoanRequest {
+  loan_name: string
   amount: number
   purpose: string
   description: string
@@ -232,7 +243,7 @@ export interface CreateLoanRequest {
     payment_frequency: string
     term_length: number
   }
-  lenders: Array<{
+  lenders?: Array<{
     email: string
     contribution_amount: number
   }>
@@ -242,6 +253,27 @@ export interface CreateLoanRequest {
     entity_tax_id?: string | null
     borrower_relationship: string
   }
+}
+
+export interface AddLendersRequest {
+  lenders: Array<{
+    email: string
+    contribution_amount: number
+  }>
+}
+
+export interface AddLendersResponse {
+  success: boolean
+  data: {
+    loan_id: string
+    lenders_added: number
+    invitations_created: number
+    participants_created: number
+    total_invited: number
+    remaining: number
+    is_fully_invited: boolean
+  }
+  message?: string
 }
 
 export interface AcceptLoanRequest {
@@ -446,14 +478,26 @@ class ApiClient {
 
   // Loan endpoints
   async createLoan(loanData: CreateLoanRequest): Promise<CreateLoanResponse> {
-    log.info('Creating loan', { 
-      amount: loanData.amount, 
-      lendersCount: loanData.lenders.length 
+    log.info('Creating loan', {
+      amount: loanData.amount,
+      lendersCount: loanData.lenders?.length || 0
     })
-    
+
     return this.request<CreateLoanResponse>('/loans', {
       method: 'POST',
       body: JSON.stringify(loanData),
+    })
+  }
+
+  async addLendersToLoan(loanId: string, lendersData: AddLendersRequest): Promise<AddLendersResponse> {
+    log.info('Adding lenders to loan', {
+      loanId,
+      lendersCount: lendersData.lenders.length
+    })
+
+    return this.request<AddLendersResponse>(`/loans/${loanId}/lenders`, {
+      method: 'POST',
+      body: JSON.stringify(lendersData),
     })
   }
 

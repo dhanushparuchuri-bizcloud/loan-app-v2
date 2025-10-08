@@ -14,7 +14,7 @@ from decimal import Decimal
 from shared.dynamodb_client import DynamoDBHelper, TABLE_NAMES
 from shared.jwt_auth import JWTAuth, AuthenticatedUser
 from shared.uuid_helper import UUIDHelper
-from shared.validation_schemas import CreateLoanRequest, ValidationHelper
+from shared.validation_schemas import CreateLoanRequest, LenderInviteRequest, ValidationHelper
 from shared.response_helper import ResponseHelper
 from shared.payment_calculator import PaymentCalculator
 
@@ -77,15 +77,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # POST /loans - Create new loan
         if path.endswith('/loans') and method == 'POST':
             return handle_create_loan(event)
-        
+
         # GET /loans/my-loans - Get borrower's loans (check this first to avoid UUID validation)
         if path.endswith('/loans/my-loans') and method == 'GET':
             return handle_get_my_loans(event)
-        
+
+        # POST /loans/{id}/lenders - Add lenders to existing loan (check before generic /{id})
+        if re.match(r'.*/loans/[^/]+/lenders$', path) and method == 'POST':
+            return handle_add_lenders(event)
+
         # GET /loans/{id} - Get loan details
         if re.match(r'.*/loans/[^/]+$', path) and method == 'GET':
             return handle_get_loan_details(event)
-        
+
         return ResponseHelper.not_found_response('Endpoint not found')
         
     except Exception as e:
@@ -137,6 +141,7 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
         # Create loan record with enhanced maturity terms
         loan = {
             'loan_id': loan_id,
+            'loan_name': ValidationHelper.sanitize_string(request_data.loan_name),
             'borrower_id': user.user_id,
             'amount': Decimal(str(request_data.amount)),
             'interest_rate': Decimal(str(request_data.interest_rate)),
@@ -165,13 +170,18 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
         # Save loan to database
         DynamoDBHelper.put_item(TABLE_NAMES['LOANS'], loan)
         logger.info(f"Created loan record: {loan_id}")
-        
-        # Process lender invitations
-        invitation_results = create_lender_invitations(loan_id, user.user_id, request_data.lenders, now)
+
+        # Process lender invitations (if any)
+        if request_data.lenders:
+            invitation_results = create_lender_invitations(loan_id, user.user_id, request_data.lenders, now)
+        else:
+            logger.info(f"Loan {loan_id} created with no initial lenders")
+            invitation_results = {'invitations_created': 0, 'participants_created': 0}
         
         # Prepare response with loan details and invitation results
         response_data = {
             'loan_id': loan_id,
+            'loan_name': request_data.loan_name,
             'borrower_id': user.user_id,
             'amount': request_data.amount,
             'interest_rate': request_data.interest_rate,
@@ -232,7 +242,11 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
         loan = DynamoDBHelper.get_item(TABLE_NAMES['LOANS'], {'loan_id': loan_id})
         if not loan:
             return ResponseHelper.not_found_response('Loan not found')
-        
+
+        # Handle backward compatibility for loans without loan_name
+        if 'loan_name' not in loan:
+            loan['loan_name'] = f"{loan['purpose']} Loan"
+
         # Check access permissions (borrower or invited lender)
         has_access = validate_loan_access(loan_id, user.user_id, user.email, loan['borrower_id'])
         if not has_access:
@@ -359,6 +373,7 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
         # Prepare detailed response
         loan_details = {
             'loan_id': loan['loan_id'],
+            'loan_name': loan['loan_name'],
             'borrower_id': loan['borrower_id'],
             'borrower_name': borrower_name,
             'amount': float(loan['amount']),
@@ -419,7 +434,10 @@ def handle_get_my_loans(event: Dict[str, Any]) -> Dict[str, Any]:
         for loan in loans:
             participants = get_loan_participants(loan['loan_id'])
             funding_progress = calculate_funding_progress(loan['amount'], loan['total_funded'], participants)
-            
+
+            # Handle backward compatibility for old loans without loan_name
+            loan_name = loan.get('loan_name', f"{loan['purpose']} Loan")
+
             # Handle backward compatibility for old loans without maturity terms
             if 'start_date' in loan:
                 # New format with enhanced maturity terms
@@ -427,9 +445,10 @@ def handle_get_my_loans(event: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 # Old format - use existing term field
                 term_display = loan.get('term', 'Unknown')
-            
+
             enriched_loan = {
                 'loan_id': loan['loan_id'],
+                'loan_name': loan_name,
                 'amount': float(loan['amount']),
                 'interest_rate': float(loan['interest_rate']),
                 'term': term_display,
@@ -440,7 +459,17 @@ def handle_get_my_loans(event: Dict[str, Any]) -> Dict[str, Any]:
                 'created_at': loan['created_at'],
                 'participant_count': len(participants),
                 'accepted_participants': len([p for p in participants if p['status'] == ParticipantStatus.ACCEPTED]),
-                'funding_progress': funding_progress
+                'funding_progress': funding_progress,
+                'participants': [
+                    {
+                        'lender_id': p['lender_id'],
+                        'lender_name': p.get('lender_name'),
+                        'lender_email': p.get('lender_email'),
+                        'contribution_amount': float(p['contribution_amount']),
+                        'status': p['status']
+                    }
+                    for p in participants
+                ]
             }
             enriched_loans.append(enriched_loan)
         
@@ -858,3 +887,125 @@ def calculate_funding_progress(total_amount, total_funded, participants: List[Di
             'pending_amount': 0,
             'is_fully_funded': False
         }
+
+
+def handle_add_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Add lenders to an existing loan.
+    POST /loans/{loan_id}/lenders
+
+    Allows borrowers to incrementally invite lenders to pending loans.
+    """
+    try:
+        # Authenticate user
+        user = JWTAuth.authenticate_user(event)
+
+        # Get loan ID from path
+        path = event.get('path', '')
+        loan_id = path.split('/')[-2]  # Extract from /loans/{id}/lenders
+
+        # Validate loan ID
+        ValidationHelper.validate_uuid_param(loan_id, 'loan_id')
+
+        logger.info(f"Adding lenders to loan: {loan_id}, user: {user.user_id}")
+
+        # Get loan
+        loan = DynamoDBHelper.get_item(TABLE_NAMES['LOANS'], {'loan_id': loan_id})
+        if not loan:
+            return ResponseHelper.not_found_response('Loan not found')
+
+        # Verify user is the borrower
+        if loan['borrower_id'] != user.user_id:
+            return ResponseHelper.forbidden_response('Only the loan creator can add lenders')
+
+        # Verify loan is still PENDING
+        if loan['status'] != LoanStatus.PENDING:
+            return ResponseHelper.validation_error_response(
+                f'Cannot add lenders to {loan["status"]} loan. Only PENDING loans can be modified.'
+            )
+
+        # Parse new lenders from request body
+        body = json.loads(event.get('body', '{}'))
+        lender_data = body.get('lenders', [])
+
+        if not lender_data:
+            return ResponseHelper.validation_error_response('No lenders provided')
+
+        # Validate new lenders
+        new_lenders = []
+        for lender in lender_data:
+            try:
+                validated = ValidationHelper.validate_request_body(LenderInviteRequest, lender)
+                new_lenders.append(validated)
+            except ValueError as e:
+                return ResponseHelper.validation_error_response(f'Invalid lender data: {str(e)}')
+
+        # Calculate current total invited
+        current_invited = calculate_total_invited(loan_id)
+        new_contributions = sum(float(l.contribution_amount) for l in new_lenders)
+        total_after_add = current_invited + new_contributions
+
+        logger.info(f"Current invited: {current_invited}, New: {new_contributions}, Total after: {total_after_add}, Loan amount: {loan['amount']}")
+
+        # Validate total doesn't exceed loan amount
+        if total_after_add > float(loan['amount']):
+            return ResponseHelper.validation_error_response(
+                f"Total invitations ({total_after_add}) would exceed loan amount ({loan['amount']}). "
+                f"Current invited: {current_invited}, Remaining available: {float(loan['amount']) - current_invited}"
+            )
+
+        # Validate borrower not inviting themselves
+        user_email_lower = user.email.lower()
+        for lender in new_lenders:
+            if lender.email.lower() == user_email_lower:
+                return ResponseHelper.validation_error_response(
+                    "You cannot invite yourself as a lender to your own loan"
+                )
+
+        # Create invitations
+        now = datetime.now(timezone.utc).isoformat()
+        invitation_results = create_lender_invitations(
+            loan_id, user.user_id, new_lenders, now
+        )
+
+        # Prepare response
+        response_data = {
+            'loan_id': loan_id,
+            'lenders_added': len(new_lenders),
+            'invitations_created': invitation_results['invitations_created'],
+            'participants_created': invitation_results['participants_created'],
+            'total_invited': total_after_add,
+            'remaining': float(loan['amount']) - total_after_add,
+            'is_fully_invited': total_after_add >= float(loan['amount'])
+        }
+
+        logger.info(f"Successfully added {len(new_lenders)} lenders to loan {loan_id}")
+        return ResponseHelper.success_response(response_data, 'Lenders added successfully')
+
+    except ValueError as e:
+        logger.error(f"Add lenders validation error: {str(e)}")
+        return ResponseHelper.validation_error_response(str(e))
+    except Exception as e:
+        logger.error(f"Add lenders error: {str(e)}")
+        return ResponseHelper.handle_exception(e)
+
+
+def calculate_total_invited(loan_id: str) -> float:
+    """
+    Calculate total contribution amount for all participants (pending + accepted).
+
+    Args:
+        loan_id: Loan ID
+
+    Returns:
+        Total invited amount
+    """
+    participants = DynamoDBHelper.query_items(
+        TABLE_NAMES['LOAN_PARTICIPANTS'],
+        'loan_id = :loan_id',
+        {':loan_id': loan_id}
+    )
+
+    total = sum(float(p['contribution_amount']) for p in participants)
+    logger.info(f"Calculated total invited for loan {loan_id}: {total} ({len(participants)} participants)")
+    return total

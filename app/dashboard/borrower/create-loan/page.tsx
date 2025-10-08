@@ -23,6 +23,7 @@ interface EntityDetails {
 }
 
 interface LoanDetails {
+  loan_name: string
   amount: number
   interestRate: number
   maturityTerms: {
@@ -45,6 +46,7 @@ interface SelectedLender {
 export default function CreateLoanPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [loanDetails, setLoanDetails] = useState<LoanDetails>({
+    loan_name: "",
     amount: 0,
     interestRate: 5,
     maturityTerms: {
@@ -114,7 +116,8 @@ export default function CreateLoanPage() {
   }
 
   const totalAssigned = selectedLenders.reduce((sum, lender) => sum + lender.amount, 0)
-  const isAmountValid = totalAssigned === loanDetails.amount && loanDetails.amount > 0
+  // Allow partial or zero funding - validation changed to allow incremental funding
+  const isAmountValid = totalAssigned <= loanDetails.amount && loanDetails.amount > 0
 
   const handleSubmit = async () => {
     console.log('[CreateLoan] Starting loan creation...', {
@@ -136,7 +139,8 @@ export default function CreateLoanPage() {
     }
 
     try {
-      const loanData = {
+      const loanData: any = {
+        loan_name: loanDetails.loan_name,
         amount: loanDetails.amount,
         purpose: loanDetails.purpose,
         description: loanDetails.description,
@@ -145,18 +149,20 @@ export default function CreateLoanPage() {
         lenders: selectedLenders.map(lender => ({
           email: lender.email,
           contribution_amount: lender.amount
-        })),
-        ...(loanDetails.purpose === "Business" && loanDetails.entityDetails.entity_name && {
-          entity_details: {
-            entity_name: loanDetails.entityDetails.entity_name,
-            entity_type: loanDetails.entityDetails.entity_type,
-            entity_tax_id: loanDetails.entityDetails.entity_tax_id || null,
-            borrower_relationship: loanDetails.entityDetails.borrower_relationship
-          }
-        })
+        }))
       }
 
-      console.log('[CreateLoan] Sending loan data:', loanData)
+      // Add entity details only if it's a business loan
+      if (loanDetails.purpose === "Business" && loanDetails.entityDetails.entity_name) {
+        loanData.entity_details = {
+          entity_name: loanDetails.entityDetails.entity_name,
+          entity_type: loanDetails.entityDetails.entity_type,
+          entity_tax_id: loanDetails.entityDetails.entity_tax_id || null,
+          borrower_relationship: loanDetails.entityDetails.borrower_relationship
+        }
+      }
+
+      console.log('[CreateLoan] Sending loan data:', JSON.stringify(loanData, null, 2))
       const response = await apiClient.createLoan(loanData)
       console.log('[CreateLoan] Response received:', response)
       
@@ -223,6 +229,27 @@ export default function CreateLoanPage() {
             {/* Step 1: Loan Details */}
             {currentStep === 1 && (
               <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="loan_name">Note Name *</Label>
+                  <Input
+                    id="loan_name"
+                    type="text"
+                    minLength={3}
+                    maxLength={100}
+                    value={loanDetails.loan_name}
+                    onChange={(e) =>
+                      setLoanDetails({
+                        ...loanDetails,
+                        loan_name: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., Real Estate Investment Note"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Give your note a friendly name for easy identification
+                  </p>
+                </div>
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="amount">Principal Amount ($)</Label>
@@ -691,9 +718,11 @@ export default function CreateLoanPage() {
                   onClick={handleNext}
                   disabled={
                     (currentStep === 1 && (
-                      !loanDetails.amount || 
-                      !loanDetails.maturityTerms.payment_frequency || 
-                      !loanDetails.maturityTerms.term_length || 
+                      !loanDetails.loan_name ||
+                      loanDetails.loan_name.length < 3 ||
+                      !loanDetails.amount ||
+                      !loanDetails.maturityTerms.payment_frequency ||
+                      !loanDetails.maturityTerms.term_length ||
                       !loanDetails.purpose ||
                       !loanDetails.description ||
                       loanDetails.description.length < 10 ||

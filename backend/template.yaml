@@ -130,6 +130,12 @@ Resources:
             RestApiId: !Ref MarketplaceApi
             Path: /loans/my-loans
             Method: get
+        AddLendersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /loans/{id}/lenders
+            Method: post
 
   LenderHandlerFunction:
     Type: AWS::Serverless::Function

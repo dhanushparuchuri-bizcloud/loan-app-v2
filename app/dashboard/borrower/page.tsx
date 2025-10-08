@@ -4,14 +4,13 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { DashboardLoader } from "@/components/dashboard-loader"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { StatsCard } from "@/components/stats-card"
 import { useAuth } from "@/lib/auth-context"
 import { useDashboard } from "@/hooks/use-dashboard"
-import { DollarSign, TrendingUp, Clock, Plus, Eye, AlertCircle } from "lucide-react"
+import { DollarSign, TrendingUp, Clock, Plus, Eye, AlertCircle, Users } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function BorrowerDashboard() {
@@ -137,52 +136,136 @@ export default function BorrowerDashboard() {
                     </Button>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Interest Rate</TableHead>
-                        <TableHead>Purpose</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Funded</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loans.map((loan) => (
-                        <TableRow key={loan.loan_id}>
-                          <TableCell className="font-medium">${loan.amount.toLocaleString()}</TableCell>
-                          <TableCell>{loan.interest_rate}%</TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                {loan.purpose === "Business" && "🏢"} {loan.purpose}
+                  <div className="space-y-4">
+                    {loans.map((loan) => {
+                      const totalInvited = loan.funding_progress.total_invited || 0
+                      const remaining = loan.amount - totalInvited
+                      const fundingPercentage = loan.amount > 0 ? (totalInvited / loan.amount) * 100 : 0
+
+                      return (
+                        <Card key={loan.loan_id} className="overflow-hidden">
+                          <CardContent className="p-6">
+                            <div className="space-y-4">
+                              {/* Header Row */}
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="text-xl font-semibold">{loan.loan_name}</h3>
+                                    {getStatusBadge(loan.status)}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      {loan.purpose === "Business" && "🏢"} {loan.purpose}
+                                    </span>
+                                    <span>•</span>
+                                    <span>${loan.amount.toLocaleString()}</span>
+                                    <span>•</span>
+                                    <span>{loan.interest_rate}% APR</span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  {loan.status === "PENDING" && remaining > 0 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => router.push(`/dashboard/loans/${loan.loan_id}#add-lenders`)}
+                                    >
+                                      <Users className="mr-2 h-4 w-4" />
+                                      Add Holders
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => router.push(`/dashboard/loans/${loan.loan_id}`)}
+                                  >
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View Details
+                                  </Button>
+                                </div>
                               </div>
-                              {loan.purpose === "Business" && loan.entity_name && (
-                                <div className="text-xs text-muted-foreground">
-                                  {loan.entity_name} ({loan.entity_type})
+
+                              {/* Funding Progress Bar */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="font-medium">Invited Amount</span>
+                                  <span className="text-muted-foreground">
+                                    ${totalInvited.toLocaleString()} / ${loan.amount.toLocaleString()}
+                                  </span>
+                                </div>
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-primary transition-all"
+                                    style={{ width: `${Math.min(fundingPercentage, 100)}%` }}
+                                  />
+                                </div>
+                                {remaining > 0 && (
+                                  <p className="text-sm text-muted-foreground">
+                                    ${remaining.toLocaleString()} remaining to invite
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Lenders List */}
+                              {loan.participants && loan.participants.length > 0 ? (
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">Note Holders</span>
+                                    <span className="text-sm text-muted-foreground">
+                                      {loan.accepted_participants} of {loan.participant_count} funded
+                                    </span>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {loan.participants.map((participant, idx) => (
+                                      <div
+                                        key={participant.lender_id}
+                                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
+                                            {participant.lender_name?.charAt(0).toUpperCase() || (idx + 1)}
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-medium">
+                                              {participant.lender_name || 'Pending Acceptance'}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                              {participant.lender_email || 'Email not available'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-sm font-semibold">
+                                            ${participant.contribution_amount.toLocaleString()}
+                                          </p>
+                                          <Badge
+                                            variant="secondary"
+                                            className={
+                                              participant.status === "ACCEPTED"
+                                                ? "bg-green-100 text-green-800 text-xs"
+                                                : "bg-yellow-100 text-yellow-800 text-xs"
+                                            }
+                                          >
+                                            {participant.status === "ACCEPTED" ? "✓ Funded" : "⏳ Pending"}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-center py-4 bg-muted/30 rounded-lg">
+                                  <p className="text-sm text-muted-foreground">
+                                    No holders invited yet
+                                  </p>
                                 </div>
                               )}
                             </div>
-                          </TableCell>
-                          <TableCell>{getStatusBadge(loan.status)}</TableCell>
-                          <TableCell>
-                            ${loan.total_funded.toLocaleString()} / ${loan.amount.toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/dashboard/loans/${loan.loan_id}`)}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
                 )}
               </CardContent>
             </Card>

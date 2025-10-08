@@ -10,8 +10,161 @@ import { DashboardLoader } from "@/components/dashboard-loader"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient, type Loan } from "@/lib/api-client"
-import { ArrowLeft, DollarSign, Calendar, TrendingUp, Users, FileText, Clock, Printer, AlertCircle } from "lucide-react"
+import { ArrowLeft, DollarSign, Calendar, TrendingUp, Users, FileText, Clock, Printer, AlertCircle, Plus, X } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+
+// Add Lenders Form Component
+function AddLendersForm({
+  loanId,
+  loanAmount,
+  currentInvited,
+  onSuccess
+}: {
+  loanId: string
+  loanAmount: number
+  currentInvited: number
+  onSuccess: () => void
+}) {
+  const [lenders, setLenders] = useState<Array<{ email: string; amount: number }>>([
+    { email: '', amount: 0 }
+  ])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const remaining = loanAmount - currentInvited
+  const totalNew = lenders.reduce((sum, l) => sum + l.amount, 0)
+  const isValid = lenders.every(l => l.email && l.amount > 0) && totalNew <= remaining
+
+  const addLenderRow = () => {
+    setLenders([...lenders, { email: '', amount: 0 }])
+  }
+
+  const removeLenderRow = (index: number) => {
+    setLenders(lenders.filter((_, i) => i !== index))
+  }
+
+  const updateLender = (index: number, field: 'email' | 'amount', value: string | number) => {
+    const updated = [...lenders]
+    updated[index] = { ...updated[index], [field]: value }
+    setLenders(updated)
+  }
+
+  const handleSubmit = async () => {
+    try {
+      setIsSubmitting(true)
+      setError(null)
+
+      // Map 'amount' to 'contribution_amount' for the API
+      const lendersData = {
+        lenders: lenders.map(l => ({
+          email: l.email,
+          contribution_amount: l.amount
+        }))
+      }
+
+      const response = await apiClient.addLendersToLoan(loanId, lendersData)
+
+      if (response.success) {
+        alert(`Successfully added ${response.data.lenders_added} note holder(s)!`)
+        setLenders([{ email: '', amount: 0 }])
+        onSuccess() // Refresh loan details
+        // Hide the form
+        const addLendersSection = document.getElementById('add-lenders-section')
+        if (addLendersSection) {
+          addLendersSection.classList.add('hidden')
+        }
+      } else {
+        setError('Failed to add note holders')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add note holders')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">Add Note Holders</h3>
+        <div className="text-sm text-muted-foreground">
+          Remaining: ${remaining.toLocaleString()} / ${loanAmount.toLocaleString()}
+        </div>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {lenders.map((lender, index) => (
+        <div key={index} className="flex gap-2 items-end">
+          <div className="flex-1">
+            <Label htmlFor={`email-${index}`}>Email</Label>
+            <Input
+              id={`email-${index}`}
+              type="email"
+              value={lender.email}
+              onChange={(e) => updateLender(index, 'email', e.target.value)}
+              placeholder="lender@example.com"
+            />
+          </div>
+          <div className="w-32">
+            <Label htmlFor={`amount-${index}`}>Amount ($)</Label>
+            <Input
+              id={`amount-${index}`}
+              type="number"
+              min="1"
+              value={lender.amount || ''}
+              onChange={(e) => updateLender(index, 'amount', Number(e.target.value))}
+              placeholder="10000"
+            />
+          </div>
+          {lenders.length > 1 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => removeLenderRow(index)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      ))}
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addLenderRow}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Another
+        </Button>
+
+        <Button
+          onClick={handleSubmit}
+          disabled={!isValid || isSubmitting}
+          size="sm"
+        >
+          {isSubmitting ? 'Adding...' : `Add ${lenders.length} Holder${lenders.length !== 1 ? 's' : ''}`}
+        </Button>
+      </div>
+
+      {totalNew > remaining && (
+        <p className="text-sm text-destructive">
+          Total amount (${totalNew.toLocaleString()}) exceeds remaining (${remaining.toLocaleString()})
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function LoanDetailsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -30,6 +183,19 @@ export default function LoanDetailsPage() {
 
     fetchLoanDetails()
   }, [user, router, loanId])
+
+  // Check for hash in URL to auto-open add lenders form
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#add-lenders') {
+      setTimeout(() => {
+        const addLendersSection = document.getElementById('add-lenders-section')
+        if (addLendersSection) {
+          addLendersSection.classList.remove('hidden')
+          addLendersSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 500)
+    }
+  }, [loan])
 
   const fetchLoanDetails = async () => {
     try {
@@ -133,8 +299,8 @@ export default function LoanDetailsPage() {
           </Button>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-balance">Note Details</h1>
-              <p className="text-muted-foreground">Note ID: {loan.loan_id}</p>
+              <h1 className="text-3xl font-bold text-balance">{loan.loan_name}</h1>
+              <p className="text-muted-foreground">{loan.purpose} • Note ID: {loan.loan_id}</p>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" onClick={handlePrint}>
@@ -306,15 +472,50 @@ export default function LoanDetailsPage() {
             {isBorrower && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    Note Holders ({participants.length})
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Note Holders ({participants.length})
+                    </CardTitle>
+                    {loan.status === "PENDING" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // Toggle add lenders form
+                          const addLendersSection = document.getElementById('add-lenders-section')
+                          if (addLendersSection) {
+                            addLendersSection.classList.toggle('hidden')
+                          }
+                        }}
+                      >
+                        <Users className="mr-2 h-4 w-4" />
+                        Add Holders
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
+                  {/* Add Lenders Form - Only for PENDING loans */}
+                  {loan.status === "PENDING" && (
+                    <div id="add-lenders-section" className="hidden mb-6 p-4 border rounded-lg bg-muted/30">
+                      <AddLendersForm
+                        loanId={loan.loan_id}
+                        loanAmount={loan.amount}
+                        currentInvited={participants.reduce((sum, p) => sum + p.contribution_amount, 0)}
+                        onSuccess={fetchLoanDetails}
+                      />
+                    </div>
+                  )}
+
                   {participants.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">No note holders yet</p>
+                      {loan.status === "PENDING" && (
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Click "Add Holders" to invite note holders to fund this note
+                        </p>
+                      )}
                     </div>
                   ) : (
                   <div className="space-y-4">
@@ -342,7 +543,7 @@ export default function LoanDetailsPage() {
                                   : "bg-yellow-100 text-yellow-800"
                               }
                             >
-                              {participation.status}
+                              {participation.status === "ACCEPTED" ? "✓ Funded" : "⏳ Pending"}
                             </Badge>
                           </div>
                         </div>

@@ -137,7 +137,10 @@ def handle_get_pending_invitations(event: Dict[str, Any]) -> Dict[str, Any]:
                 # Get borrower details
                 borrower = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': loan['borrower_id']})
                 borrower_name = borrower['name'] if borrower else 'Unknown'
-                
+
+                # Handle backward compatibility for loan_name
+                loan_name = loan.get('loan_name', f"{loan['purpose']} Loan")
+
                 # Handle backward compatibility for maturity terms
                 if 'start_date' in loan:
                     # New format with enhanced maturity terms
@@ -161,6 +164,7 @@ def handle_get_pending_invitations(event: Dict[str, Any]) -> Dict[str, Any]:
                 # Create invitation object
                 invitation = {
                     'loan_id': participant['loan_id'],
+                    'loan_name': loan_name,
                     'loan_amount': float(loan['amount']),
                     'loan_purpose': loan['purpose'],
                     'loan_description': loan['description'],
