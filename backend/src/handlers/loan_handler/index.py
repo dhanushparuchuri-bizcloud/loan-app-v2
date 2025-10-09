@@ -699,8 +699,12 @@ def get_filtered_participant_data(loan_id: str, requesting_user_id: str, request
             # Check if this is the requesting user's participation
             # Handle both actual user_id and pending:email format
             pending_lender_id = f"pending:{requesting_user_email}"
+            logger.info(f"Checking participation: lender_id={lender_id}, requesting_user_id={requesting_user_id}, pending_lender_id={pending_lender_id}")
             if lender_id == requesting_user_id or lender_id == pending_lender_id:
+                logger.info(f"MATCH FOUND! Setting user_participation for {requesting_user_id}")
                 user_participation = enriched_participant
+            else:
+                logger.info(f"No match: {lender_id} != {requesting_user_id} and {lender_id} != {pending_lender_id}")
             
             # Add to all participants list (will be filtered based on role)
             all_participants.append(enriched_participant)
