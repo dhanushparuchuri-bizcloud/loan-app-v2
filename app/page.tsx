@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
 
 export default function HomePage() {
@@ -20,10 +21,12 @@ export default function HomePage() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="animate-pulse">
         <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-          <img 
-            src="/ubertejas-ventures-logo.jpg" 
-            alt="UbertejasVC Logo" 
-            className="w-20 h-20 object-contain"
+          <Image
+            src="/ubertejas-ventures-logo.jpg"
+            alt="UbertejasVC Logo"
+            width={80}
+            height={80}
+            className="object-contain"
           />
         </div>
         <p className="text-muted-foreground">Loading...</p>

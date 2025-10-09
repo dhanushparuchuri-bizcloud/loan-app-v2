@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,10 +49,12 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-            <img 
-              src="/ubertejas-ventures-logo.jpg" 
-              alt="UbertejasVC Logo" 
-              className="w-16 h-16 object-contain"
+            <Image
+              src="/ubertejas-ventures-logo.jpg"
+              alt="UbertejasVC Logo"
+              width={64}
+              height={64}
+              className="object-contain"
             />
           </div>
           <CardTitle className="text-2xl font-semibold">Welcome Back</CardTitle>

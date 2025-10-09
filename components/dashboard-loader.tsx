@@ -1,5 +1,7 @@
 "use client"
 
+import Image from "next/image"
+
 interface DashboardLoaderProps {
   type: "borrower" | "lender"
 }
@@ -18,10 +20,12 @@ export function DashboardLoader({ type }: DashboardLoaderProps) {
         {/* Animated logo */}
         <div className="mb-8 animate-pulse">
           <div className="w-20 h-20 mx-auto flex items-center justify-center">
-            <img 
-              src="/ubertejas-ventures-logo.jpg" 
-              alt="UbertejasVC Logo" 
-              className="w-20 h-20 object-contain"
+            <Image
+              src="/ubertejas-ventures-logo.jpg"
+              alt="UbertejasVC Logo"
+              width={80}
+              height={80}
+              className="object-contain"
             />
           </div>
         </div>

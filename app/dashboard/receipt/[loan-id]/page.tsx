@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -117,10 +118,12 @@ export default function ReceiptPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <img 
-                src="/ubertejas-ventures-logo.jpg" 
-                alt="UbertejasVC Logo" 
-                className="w-12 h-12 object-contain"
+              <Image
+                src="/ubertejas-ventures-logo.jpg"
+                alt="UbertejasVC Logo"
+                width={48}
+                height={48}
+                className="object-contain"
               />
               <div>
                 <h1 className="text-2xl font-bold">UbertejasVC</h1>

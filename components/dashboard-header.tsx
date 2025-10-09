@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ChevronDown, LogOut } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 
 interface DashboardHeaderProps {
   currentRole: "borrower" | "lender"
@@ -26,10 +27,12 @@ export function DashboardHeader({ currentRole, onRoleSwitch }: DashboardHeaderPr
       <div className="flex h-16 items-center justify-between px-6">
         {/* Logo */}
         <div className="flex items-center space-x-4">
-          <img 
-            src="/ubertejas-ventures-logo.jpg" 
-            alt="UbertejasVC Logo" 
-            className="w-8 h-8 object-contain"
+          <Image
+            src="/ubertejas-ventures-logo.jpg"
+            alt="UbertejasVC Logo"
+            width={32}
+            height={32}
+            className="object-contain"
           />
           <h1 className="text-xl font-semibold">UbertejasVC</h1>
         </div>
