@@ -72,6 +72,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if re.match(r'.*/lender/accept/[^/]+$', path) and method == 'PUT':
             return handle_accept_loan(event)
         
+        # GET /lenders/search - Search for previous lenders
+        if path.endswith('/lenders/search') and method == 'GET':
+            return handle_search_lenders(event)
+        
         return ResponseHelper.not_found_response('Endpoint not found')
         
     except Exception as e:
@@ -113,8 +117,28 @@ def handle_get_pending_invitations(event: Dict[str, Any]) -> Dict[str, Any]:
             'LenderIndex'
         )
         
-        # Combine both sets of participants
-        all_participants = actual_participants + pending_participants
+        # Deduplicate by loan_id to prevent duplicate invitations
+        # Prioritize actual user_id records over pending:email records
+        seen_loan_ids = set()
+        all_participants = []
+        
+        # First, add all actual user_id records
+        for participant in actual_participants:
+            loan_id = participant['loan_id']
+            if loan_id not in seen_loan_ids:
+                all_participants.append(participant)
+                seen_loan_ids.add(loan_id)
+            else:
+                logger.warning(f"Duplicate participant record detected for loan {loan_id} with user_id {user.user_id}")
+        
+        # Then, add pending:email records only if not already seen
+        for participant in pending_participants:
+            loan_id = participant['loan_id']
+            if loan_id not in seen_loan_ids:
+                all_participants.append(participant)
+                seen_loan_ids.add(loan_id)
+            else:
+                logger.warning(f"Duplicate participant record detected for loan {loan_id} with pending:{user.email}")
         
         # Filter for pending participants
         participants = [
@@ -380,3 +404,133 @@ def accept_loan_atomic(
             'success': False,
             'error': f"Transaction failed: {str(e)}"
         }
+
+
+def handle_search_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Handle searching for previous lenders.
+    Returns lenders who have participated in loans with their stats.
+    
+    Args:
+        event: API Gateway event
+        
+    Returns:
+        API Gateway response with lender list
+    """
+    try:
+        # Authenticate user and require borrower role
+        user = JWTAuth.authenticate_user(event)
+        JWTAuth.require_role(user, 'borrower')
+        
+        # Get optional search query
+        query_params = event.get('queryStringParameters') or {}
+        search_query = query_params.get('q', '').lower().strip()
+        
+        logger.info(f"Searching lenders for borrower: {user.user_id}, query: {search_query}")
+        
+        # Get all accepted participants
+        participants = DynamoDBHelper.scan_items(TABLE_NAMES['LOAN_PARTICIPANTS'])
+        
+        # Filter for accepted participants only
+        accepted_participants = [
+            p for p in participants 
+            if p.get('status') == ParticipantStatus.ACCEPTED
+        ]
+        
+        # Group by lender_id and calculate stats
+        lender_stats = {}
+        for participant in accepted_participants:
+            lender_id = participant['lender_id']
+            
+            # Skip pending:email format lenders
+            if lender_id.startswith('pending:'):
+                continue
+            
+            if lender_id not in lender_stats:
+                lender_stats[lender_id] = {
+                    'lender_id': lender_id,
+                    'investments': [],
+                    'total_invested': Decimal('0'),
+                    'investment_count': 0
+                }
+            
+            # Add investment details
+            loan_id = participant['loan_id']
+            contribution = participant['contribution_amount']
+            
+            # Get loan details for this investment
+            loan = DynamoDBHelper.get_item(TABLE_NAMES['LOANS'], {'loan_id': loan_id})
+            if loan:
+                investment_detail = {
+                    'loan_id': loan_id,
+                    'loan_name': loan.get('loan_name', f"{loan['purpose']} Loan"),
+                    'amount': contribution,
+                    'apr': loan['interest_rate'],
+                    'status': loan['status']
+                }
+                lender_stats[lender_id]['investments'].append(investment_detail)
+                lender_stats[lender_id]['total_invested'] += contribution
+                lender_stats[lender_id]['investment_count'] += 1
+        
+        # Enrich with user details and calculate averages
+        lenders = []
+        for lender_id, stats in lender_stats.items():
+            try:
+                # Get lender user details
+                lender_user = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': lender_id})
+                if not lender_user:
+                    logger.warning(f"Lender user not found: {lender_id}")
+                    continue
+                
+                # Apply search filter if provided
+                if search_query:
+                    name_match = search_query in lender_user['name'].lower()
+                    email_match = search_query in lender_user['email'].lower()
+                    if not (name_match or email_match):
+                        continue
+                
+                # Calculate averages
+                avg_investment = stats['total_invested'] / stats['investment_count'] if stats['investment_count'] > 0 else Decimal('0')
+                avg_apr = sum(inv['apr'] for inv in stats['investments']) / len(stats['investments']) if stats['investments'] else Decimal('0')
+                
+                # Get most recent investment
+                last_investment = stats['investments'][-1] if stats['investments'] else None
+                
+                lender_data = {
+                    'lender_id': lender_id,
+                    'name': lender_user['name'],
+                    'email': lender_user['email'],
+                    'stats': {
+                        'investment_count': stats['investment_count'],
+                        'total_invested': float(stats['total_invested']),
+                        'average_investment': float(avg_investment),
+                        'average_apr': float(avg_apr)
+                    },
+                    'last_investment': {
+                        'loan_name': last_investment['loan_name'],
+                        'amount': float(last_investment['amount']),
+                        'apr': float(last_investment['apr']),
+                        'status': last_investment['status']
+                    } if last_investment else None
+                }
+                
+                lenders.append(lender_data)
+                
+            except Exception as e:
+                logger.error(f"Error enriching lender {lender_id}: {str(e)}")
+                continue
+        
+        # Sort by total invested (descending)
+        lenders.sort(key=lambda x: x['stats']['total_invested'], reverse=True)
+        
+        response_data = {
+            'lenders': lenders,
+            'total_count': len(lenders)
+        }
+        
+        logger.info(f"Found {len(lenders)} lenders matching query")
+        return ResponseHelper.success_response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Search lenders error: {str(e)}")
+        return ResponseHelper.handle_exception(e)

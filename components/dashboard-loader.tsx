@@ -17,8 +17,12 @@ export function DashboardLoader({ type }: DashboardLoaderProps) {
       <div className="text-center">
         {/* Animated logo */}
         <div className="mb-8 animate-pulse">
-          <div className="w-20 h-20 mx-auto bg-primary rounded-full flex items-center justify-center">
-            <div className="w-10 h-10 bg-primary-foreground rounded-full"></div>
+          <div className="w-20 h-20 mx-auto flex items-center justify-center">
+            <img 
+              src="/ubertejas-ventures-logo.jpg" 
+              alt="UbertejasVC Logo" 
+              className="w-20 h-20 object-contain"
+            />
           </div>
         </div>
 

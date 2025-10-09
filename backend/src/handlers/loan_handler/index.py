@@ -78,6 +78,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if path.endswith('/loans') and method == 'POST':
             return handle_create_loan(event)
 
+        # GET /lenders/search - Search for previous lenders (check before /loans routes)
+        if path.endswith('/lenders/search') and method == 'GET':
+            return handle_search_lenders(event)
+
         # GET /loans/my-loans - Get borrower's loans (check this first to avoid UUID validation)
         if path.endswith('/loans/my-loans') and method == 'GET':
             return handle_get_my_loans(event)
@@ -856,19 +860,22 @@ def calculate_funding_progress(total_amount, total_funded, participants: List[Di
         pending_participants = [p for p in participants if p['status'] == ParticipantStatus.PENDING]
         
         pending_amount = sum(float(p['contribution_amount']) for p in pending_participants)
+        # Calculate total invited (both accepted and pending)
+        total_invited = sum(float(p['contribution_amount']) for p in participants)
         
         funding_percentage = (total_funded / total_amount * 100) if total_amount > 0 else 0
         
         return {
             'total_amount': total_amount,
             'total_funded': total_funded,
-            'remaining_amount': total_amount - total_funded,
+            'total_invited': total_invited,  # Total invited including pending
+            'remaining_amount': total_amount - total_invited,  # Use total_invited, not total_funded
             'funding_percentage': round(funding_percentage, 2),
             'total_participants': len(participants),
             'accepted_participants': len(accepted_participants),
             'pending_participants': len(pending_participants),
             'pending_amount': pending_amount,
-            'is_fully_funded': total_funded >= total_amount
+            'is_fully_funded': total_invited >= total_amount  # Use total_invited
         }
         
     except Exception as e:
@@ -1009,3 +1016,137 @@ def calculate_total_invited(loan_id: str) -> float:
     total = sum(float(p['contribution_amount']) for p in participants)
     logger.info(f"Calculated total invited for loan {loan_id}: {total} ({len(participants)} participants)")
     return total
+
+
+
+def handle_search_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Search for lenders the borrower has previously worked with.
+    
+    Args:
+        event: API Gateway event
+        
+    Returns:
+        API Gateway response with list of lenders
+    """
+    try:
+        # Authenticate user and require borrower role
+        user = JWTAuth.authenticate_user(event)
+        JWTAuth.require_role(user, 'borrower')
+        
+        # Get search query from query parameters
+        query_params = event.get('queryStringParameters') or {}
+        search_query = query_params.get('q', '').lower().strip()
+        
+        logger.info(f"Searching lenders for borrower: {user.user_id}, query: '{search_query}'")
+        
+        # Get all loans for this borrower
+        borrower_loans = DynamoDBHelper.query_items(
+            TABLE_NAMES['LOANS'],
+            'borrower_id = :borrower_id',
+            {':borrower_id': user.user_id},
+            'BorrowerIndex'
+        )
+        
+        logger.info(f"Found {len(borrower_loans)} loans for borrower")
+        
+        # Collect all unique lenders from those loans
+        lender_map = {}
+        
+        for loan in borrower_loans:
+            # Get participants for this loan
+            participants = DynamoDBHelper.query_items(
+                TABLE_NAMES['LOAN_PARTICIPANTS'],
+                'loan_id = :loan_id',
+                {':loan_id': loan['loan_id']}
+            )
+            
+            for participant in participants:
+                lender_id = participant['lender_id']
+                
+                # Skip pending lenders (not registered yet)
+                if lender_id.startswith('pending:'):
+                    continue
+                
+                # Only include accepted lenders (proven track record)
+                if participant['status'] != ParticipantStatus.ACCEPTED:
+                    continue
+                
+                # Get or initialize lender stats
+                if lender_id not in lender_map:
+                    lender = DynamoDBHelper.get_item(
+                        TABLE_NAMES['USERS'],
+                        {'user_id': lender_id}
+                    )
+                    
+                    if not lender:
+                        continue
+                    
+                    lender_map[lender_id] = {
+                        'lender_id': lender_id,
+                        'name': lender['name'],
+                        'email': lender['email'],
+                        'investment_count': 0,
+                        'total_invested': 0,
+                        'investments': []
+                    }
+                
+                # Aggregate stats
+                lender_map[lender_id]['investment_count'] += 1
+                lender_map[lender_id]['total_invested'] += float(participant['contribution_amount'])
+                lender_map[lender_id]['investments'].append({
+                    'loan_name': loan.get('loan_name', loan['purpose']),
+                    'amount': float(participant['contribution_amount']),
+                    'apr': float(loan['interest_rate']),
+                    'status': loan['status'],
+                    'date': participant.get('responded_at', participant['invited_at'])
+                })
+        
+        # Convert to list and calculate averages
+        lenders = []
+        for lender_data in lender_map.values():
+            # Calculate average investment and APR
+            avg_investment = lender_data['total_invested'] / lender_data['investment_count']
+            avg_apr = sum(inv['amount'] * inv['apr'] for inv in lender_data['investments']) / lender_data['total_invested']
+            
+            # Get last investment
+            last_investment = max(lender_data['investments'], key=lambda x: x['date'])
+            
+            lenders.append({
+                'lender_id': lender_data['lender_id'],
+                'name': lender_data['name'],
+                'email': lender_data['email'],
+                'stats': {
+                    'investment_count': lender_data['investment_count'],
+                    'total_invested': round(lender_data['total_invested'], 2),
+                    'average_investment': round(avg_investment, 2),
+                    'average_apr': round(avg_apr, 2)
+                },
+                'last_investment': {
+                    'loan_name': last_investment['loan_name'],
+                    'amount': last_investment['amount'],
+                    'apr': last_investment['apr'],
+                    'status': last_investment['status']
+                }
+            })
+        
+        # Filter by search query if provided
+        if search_query:
+            lenders = [
+                l for l in lenders
+                if search_query in l['name'].lower() or search_query in l['email'].lower()
+            ]
+        
+        # Sort by investment count (most frequent first)
+        lenders.sort(key=lambda x: x['stats']['investment_count'], reverse=True)
+        
+        logger.info(f"Returning {len(lenders)} lenders (filtered from {len(lender_map)} total)")
+        
+        return ResponseHelper.success_response({
+            'lenders': lenders,
+            'total_count': len(lenders)
+        })
+        
+    except Exception as e:
+        logger.error(f"Search lenders error: {str(e)}")
+        return ResponseHelper.handle_exception(e)

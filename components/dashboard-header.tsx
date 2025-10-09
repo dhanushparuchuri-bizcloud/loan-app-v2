@@ -26,10 +26,12 @@ export function DashboardHeader({ currentRole, onRoleSwitch }: DashboardHeaderPr
       <div className="flex h-16 items-center justify-between px-6">
         {/* Logo */}
         <div className="flex items-center space-x-4">
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <div className="w-4 h-4 bg-primary-foreground rounded-full"></div>
-          </div>
-          <h1 className="text-xl font-semibold">LendingHub</h1>
+          <img 
+            src="/ubertejas-ventures-logo.jpg" 
+            alt="UbertejasVC Logo" 
+            className="w-8 h-8 object-contain"
+          />
+          <h1 className="text-xl font-semibold">UbertejasVC</h1>
         </div>
 
         {/* Right side */}

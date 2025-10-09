@@ -344,7 +344,7 @@ export default function LoanDetailsPage() {
                     <p className="text-xl font-semibold">
                       {loan.maturity_terms ? 
                         `${loan.maturity_terms.payment_frequency} for ${loan.maturity_terms.term_length} months` : 
-                        (loan.term || 'N/A')
+                        'N/A'
                       }
                     </p>
                   </div>
@@ -646,18 +646,18 @@ export default function LoanDetailsPage() {
                     <div className="space-y-3">
                       <h4 className="font-semibold">Payment Schedule:</h4>
                       <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-4">
-                        {loan.borrower_payment_details.payment_dates.map((date, index) => (
+                        {loan.borrower_payment_details?.payment_dates.map((date, index) => (
                           <div key={index} className="p-3 bg-muted rounded text-center">
                             <p className="text-sm text-muted-foreground">Payment {index + 1}</p>
                             <p className="font-medium">{new Date(date).toLocaleDateString()}</p>
-                            <p className="font-semibold text-primary">${loan.borrower_payment_details.total_payment_amount.toLocaleString()}</p>
+                            <p className="font-semibold text-primary">${loan.borrower_payment_details?.total_payment_amount.toLocaleString()}</p>
                           </div>
                         ))}
                       </div>
                     </div>
 
                     {/* Disclaimer */}
-                    {loan.borrower_payment_details.disclaimer && (
+                    {loan.borrower_payment_details?.disclaimer && (
                       <Alert>
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription className="text-sm">

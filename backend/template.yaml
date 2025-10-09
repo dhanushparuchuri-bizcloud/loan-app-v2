@@ -169,6 +169,12 @@ Resources:
             RestApiId: !Ref MarketplaceApi
             Path: /lender/accept/{loan_id}
             Method: put
+        SearchLendersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /lenders/search
+            Method: get
 
   UserHandlerFunction:
     Type: AWS::Serverless::Function

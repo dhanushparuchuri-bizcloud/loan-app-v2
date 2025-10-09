@@ -111,6 +111,26 @@
   }
 }
 
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes smoothPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
 .animate-dots::after {
   content: "";
   animation: dots 1.5s infinite;
@@ -123,6 +143,16 @@
 .fade-enter-active {
   opacity: 1;
   transition: opacity 300ms ease-in-out;
+}
+
+/* Custom accordion slide animation */
+.accordion-slide-in {
+  animation: slideInFromTop 300ms ease-out;
+}
+
+/* Smooth pulse for badges */
+.badge-pulse {
+  animation: smoothPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @theme inline {

@@ -68,11 +68,15 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-secondary/20 to-accent/30 p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <div className="w-16 h-16 mx-auto bg-primary rounded-full flex items-center justify-center mb-4">
-            <div className="w-8 h-8 bg-primary-foreground rounded-full"></div>
+          <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+            <img 
+              src="/ubertejas-ventures-logo.jpg" 
+              alt="UbertejasVC Logo" 
+              className="w-16 h-16 object-contain"
+            />
           </div>
           <CardTitle className="text-2xl font-semibold">Create Account</CardTitle>
-          <CardDescription>Join the private lending marketplace</CardDescription>
+          <CardDescription>Join UbertejasVC</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

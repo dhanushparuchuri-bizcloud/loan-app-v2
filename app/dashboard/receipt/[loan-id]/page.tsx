@@ -117,12 +117,14 @@ export default function ReceiptPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center">
-                <div className="w-6 h-6 bg-white rounded-full"></div>
-              </div>
+              <img 
+                src="/ubertejas-ventures-logo.jpg" 
+                alt="UbertejasVC Logo" 
+                className="w-12 h-12 object-contain"
+              />
               <div>
-                <h1 className="text-2xl font-bold">LendingHub</h1>
-                <p className="text-gray-600">Private Lending Marketplace</p>
+                <h1 className="text-2xl font-bold">UbertejasVC</h1>
+                <p className="text-gray-600">Ubertejas Ventures Capital</p>
               </div>
             </div>
             <div className="text-right">
@@ -374,9 +376,9 @@ export default function ReceiptPage() {
               <div>
                 <h4 className="font-semibold mb-2">Contact Information</h4>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <p>LendingHub Support</p>
-                  <p>Email: support@lendinghub.com</p>
-                  <p>Phone: 1-800-LENDING</p>
+                  <p>UbertejasVC Support</p>
+                  <p>Email: support@bizcloudexperts.com</p>
+                  <p>Phone: (214) 289-5611</p>
                   <p>Available 24/7 for assistance</p>
                 </div>
               </div>

@@ -12,12 +12,13 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { StatsCard } from "@/components/stats-card"
 import { useAuth } from "@/lib/auth-context"
 import { useLenderDashboard } from "@/hooks/use-dashboard"
-import { DollarSign, TrendingUp, Clock, Bell, Eye, AlertCircle } from "lucide-react"
+import { DollarSign, TrendingUp, Clock, Bell, Eye, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function LenderDashboard() {
   const [isRoleSwitching, setIsRoleSwitching] = useState(false)
   const [statusFilter, setStatusFilter] = useState("all")
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const { user } = useAuth()
   const { lenderStats, invitations, portfolio, portfolioSummary, isLoading, error, refetch } = useLenderDashboard()
   const router = useRouter()
@@ -39,6 +40,18 @@ export default function LenderDashboard() {
     setTimeout(() => {
       router.push("/dashboard/borrower")
     }, 1500)
+  }
+
+  const toggleItemExpansion = (loanId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(loanId)) {
+        newSet.delete(loanId)
+      } else {
+        newSet.add(loanId)
+      }
+      return newSet
+    })
   }
 
   if (isLoading || isRoleSwitching) {
@@ -67,26 +80,55 @@ export default function LenderDashboard() {
     switch (status) {
       case "PENDING":
         return (
-          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-            Pending
+          <Badge
+            className="border"
+            style={{
+              backgroundColor: '#FFFBEB',
+              color: '#B45309',
+              borderColor: '#FDE68A',
+              animation: 'smoothPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+            }}
+          >
+            ⏳ Pending
           </Badge>
         )
       case "ACCEPTED":
         return (
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
-            Accepted
+          <Badge
+            className="border"
+            style={{
+              backgroundColor: '#ECFDF5',
+              color: '#047857',
+              borderColor: '#A7F3D0'
+            }}
+          >
+            ✓ Accepted
           </Badge>
         )
       case "ACTIVE":
         return (
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
-            Active
+          <Badge
+            className="border"
+            style={{
+              backgroundColor: '#ECFDF5',
+              color: '#047857',
+              borderColor: '#A7F3D0'
+            }}
+          >
+            ✓ Active
           </Badge>
         )
       case "DECLINED":
         return (
-          <Badge variant="secondary" className="bg-red-100 text-red-800">
-            Declined
+          <Badge
+            className="border"
+            style={{
+              backgroundColor: '#FFF1F2',
+              color: '#BE123C',
+              borderColor: '#FECDD3'
+            }}
+          >
+            ✗ Declined
           </Badge>
         )
       default:
@@ -233,111 +275,178 @@ export default function LenderDashboard() {
               </CardHeader>
               <CardContent>
                 {filteredPortfolio.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4">
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4 bg-primary/10">
                       {invitations.length > 0 ? (
-                        <AlertCircle className="h-8 w-8 text-yellow-600" />
+                        <Bell className="h-10 w-10 text-yellow-600" />
                       ) : (
-                        <DollarSign className="h-8 w-8 text-muted-foreground" />
+                        <TrendingUp className="h-10 w-10 text-primary" />
                       )}
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">
-                      {invitations.length > 0 ? "Review Pending Invitations" : "No investments yet"}
+                    <h3 className="text-xl font-semibold mb-2">
+                      {invitations.length > 0 ? "Review Pending Invitations" : "Start Building Your Portfolio"}
                     </h3>
-                    <p className="text-muted-foreground mb-4">
+                    <p className="text-muted-foreground max-w-sm mx-auto mb-6">
                       {invitations.length > 0
-                        ? "You have pending note invitations to review above"
-                        : "Start investing to build your note portfolio"}
+                        ? "You have pending note invitations to review above. Accept invitations to start earning returns."
+                        : "You haven't accepted any note invitations yet. When you do, they'll appear here in your portfolio."}
                     </p>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Issuer</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Interest</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Returns</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPortfolio.map((item) => (
-                        <TableRow key={item.loan_id}>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <p className="font-medium">{item.borrower_name}</p>
-                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                {item.purpose === "Business" && "🏢"} {item.purpose}
+                  <div className="space-y-4">
+                    {filteredPortfolio.map((item) => {
+                      const isExpanded = expandedItems.has(item.loan_id)
+                      const contributionPercentage = item.loan_amount > 0
+                        ? ((item.contribution_amount / item.loan_amount) * 100).toFixed(1)
+                        : '0'
+
+                      return (
+                        <Card key={item.loan_id} className="overflow-hidden transition-all duration-200 hover:shadow-lg hover:border-primary/20">
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              {/* Header */}
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="font-semibold">{item.borrower_name}</h4>
+                                    {getStatusBadge(item.participation_status)}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      {item.purpose === "Business" && "🏢"} {item.purpose}
+                                    </span>
+                                    {item.purpose === "Business" && item.entity_name && (
+                                      <>
+                                        <span>•</span>
+                                        <span className="text-blue-600">{item.entity_name}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              {item.purpose === "Business" && item.entity_name && (
-                                <div className="text-xs text-blue-600">
-                                  {item.entity_name} ({item.entity_type})
+
+                              {/* Key Metrics */}
+                              <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <p className="text-muted-foreground">Your Share</p>
+                                  <p className="font-semibold text-lg">
+                                    ${item.contribution_amount.toLocaleString()}
+                                    <span className="text-sm text-muted-foreground ml-1">
+                                      ({contributionPercentage}%)
+                                    </span>
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    of ${item.loan_amount.toLocaleString()}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">Expected Returns</p>
+                                  {item.payment_amount ? (
+                                    <>
+                                      <p className="font-semibold text-lg text-green-600">
+                                        ${item.payment_amount.toLocaleString()}/mo
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        ${item.total_interest?.toLocaleString() || '0'} total
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="font-semibold text-lg text-green-600">
+                                        ${item.expected_annual_return.toLocaleString()}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        ${item.expected_monthly_return.toLocaleString()}/mo
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-sm">
+                                <span className="font-medium">{item.interest_rate}% APR</span>
+                                <span className="text-muted-foreground"> • </span>
+                                <span className="text-muted-foreground">Note: {item.loan_status}</span>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex gap-2 pt-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleItemExpansion(item.loan_id)}
+                                  className="flex-1"
+                                >
+                                  {isExpanded ? (
+                                    <>
+                                      <ChevronUp className="mr-2 h-4 w-4" />
+                                      Less Info
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ChevronDown className="mr-2 h-4 w-4" />
+                                      More Info
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/dashboard/loans/${item.loan_id}`)}
+                                >
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View Receipt
+                                </Button>
+                              </div>
+
+                              {/* Expandable Details */}
+                              {isExpanded && (
+                                <div
+                                  className="pt-3 border-t space-y-2 text-sm"
+                                  style={{
+                                    animation: 'slideInFromTop 300ms ease-out'
+                                  }}
+                                >
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <p className="text-muted-foreground">Total Loan Amount</p>
+                                      <p className="font-medium">${item.loan_amount.toLocaleString()}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Your Contribution</p>
+                                      <p className="font-medium">{contributionPercentage}%</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Term</p>
+                                      <p className="font-medium">{item.term}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Payment Frequency</p>
+                                      <p className="font-medium">
+                                        {item.maturity_terms?.payment_frequency || 'Monthly'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {item.purpose === "Business" && item.entity_name && (
+                                    <div className="pt-2">
+                                      <p className="text-muted-foreground">Business Entity</p>
+                                      <p className="font-medium">
+                                        {item.entity_name} ({item.entity_type})
+                                      </p>
+                                    </div>
+                                  )}
+                                  <div className="pt-2">
+                                    <p className="text-muted-foreground">Description</p>
+                                    <p className="text-sm">{item.description || 'No description provided'}</p>
+                                  </div>
                                 </div>
                               )}
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">${item.contribution_amount.toLocaleString()}</p>
-                              <p className="text-sm text-muted-foreground">
-                                of ${item.loan_amount.toLocaleString()}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{item.interest_rate}%</p>
-                              <p className="text-sm text-muted-foreground">{item.term}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              {getStatusBadge(item.participation_status)}
-                              <p className="text-xs text-muted-foreground">
-                                Note: {item.loan_status}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              {/* Show actual payment calculations if available */}
-                              {item.payment_amount ? (
-                                <>
-                                  <p className="font-medium text-green-600">
-                                    ${item.payment_amount.toLocaleString()}/mo
-                                  </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    ${item.total_interest?.toLocaleString() || '0'} total interest
-                                  </p>
-                                </>
-                              ) : (
-                                <>
-                                  <p className="font-medium text-green-600">
-                                    ${item.expected_annual_return.toLocaleString()}
-                                  </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    ${item.expected_monthly_return.toLocaleString()}/mo
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push(`/dashboard/loans/${item.loan_id}`)}
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
                 )}
               </CardContent>
             </Card>

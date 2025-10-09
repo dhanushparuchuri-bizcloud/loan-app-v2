@@ -8,13 +8,17 @@ import { Badge } from "@/components/ui/badge"
 import { DashboardLoader } from "@/components/dashboard-loader"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { StatsCard } from "@/components/stats-card"
+import { AddHoldersModal } from "@/components/add-holders-modal"
 import { useAuth } from "@/lib/auth-context"
 import { useDashboard } from "@/hooks/use-dashboard"
-import { DollarSign, TrendingUp, Clock, Plus, Eye, AlertCircle, Users } from "lucide-react"
+import { DollarSign, TrendingUp, Clock, Plus, Eye, AlertCircle, Users, ChevronDown, ChevronUp } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function BorrowerDashboard() {
   const [isRoleSwitching, setIsRoleSwitching] = useState(false)
+  const [selectedLoan, setSelectedLoan] = useState<any>(null)
+  const [isAddHoldersModalOpen, setIsAddHoldersModalOpen] = useState(false)
+  const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set())
   const { user } = useAuth()
   const { borrowerStats, loans, isLoading, error, refetch } = useDashboard()
   const router = useRouter()
@@ -31,6 +35,18 @@ export default function BorrowerDashboard() {
     setTimeout(() => {
       router.push("/dashboard/lender")
     }, 1500)
+  }
+
+  const toggleLoanExpansion = (loanId: string) => {
+    setExpandedLoans(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(loanId)) {
+        newSet.delete(loanId)
+      } else {
+        newSet.add(loanId)
+      }
+      return newSet
+    })
   }
 
   if (isLoading || isRoleSwitching) {
@@ -55,14 +71,29 @@ export default function BorrowerDashboard() {
     switch (status) {
       case "PENDING":
         return (
-          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-            Pending
+          <Badge
+            className="border"
+            style={{
+              backgroundColor: '#FFFBEB',
+              color: '#B45309',
+              borderColor: '#FDE68A',
+              animation: 'smoothPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+            }}
+          >
+            ⏳ Pending
           </Badge>
         )
       case "ACTIVE":
         return (
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
-            Active
+          <Badge
+            className="border"
+            style={{
+              backgroundColor: '#ECFDF5',
+              color: '#047857',
+              borderColor: '#A7F3D0'
+            }}
+          >
+            ✓ Active
           </Badge>
         )
       default:
@@ -124,14 +155,16 @@ export default function BorrowerDashboard() {
               </CardHeader>
               <CardContent>
                 {loans.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 mx-auto bg-muted rounded-full flex items-center justify-center mb-4">
-                      <DollarSign className="h-8 w-8 text-muted-foreground" />
+                  <div className="text-center py-12">
+                    <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                      <DollarSign className="h-10 w-10 text-primary" />
                     </div>
-                    <h3 className="text-lg font-semibold mb-2">No notes yet</h3>
-                    <p className="text-muted-foreground mb-4">Create your first note to get started</p>
-                    <Button onClick={() => router.push("/dashboard/borrower/create-loan")}>
-                      <Plus className="mr-2 h-4 w-4" />
+                    <h3 className="text-xl font-semibold mb-2">Create Your First Note</h3>
+                    <p className="text-muted-foreground max-w-sm mx-auto mb-6">
+                      Start raising capital by creating a promissory note and inviting holders to fund it
+                    </p>
+                    <Button size="lg" onClick={() => router.push("/dashboard/borrower/create-loan")}>
+                      <Plus className="mr-2 h-5 w-5" />
                       Create New Note
                     </Button>
                   </div>
@@ -142,15 +175,19 @@ export default function BorrowerDashboard() {
                       const remaining = loan.amount - totalInvited
                       const fundingPercentage = loan.amount > 0 ? (totalInvited / loan.amount) * 100 : 0
 
+                      const isExpanded = expandedLoans.has(loan.loan_id)
+                      const participantCount = loan.participants?.length || 0
+                      const acceptedCount = loan.accepted_participants || 0
+
                       return (
-                        <Card key={loan.loan_id} className="overflow-hidden">
+                        <Card key={loan.loan_id} className="overflow-hidden transition-all duration-200 hover:shadow-lg hover:border-primary/20">
                           <CardContent className="p-6">
                             <div className="space-y-4">
                               {/* Header Row */}
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-3 mb-2">
-                                    <h3 className="text-xl font-semibold">{loan.loan_name}</h3>
+                                    <h3 className="text-lg font-semibold">{loan.loan_name}</h3>
                                     {getStatusBadge(loan.status)}
                                   </div>
                                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -163,26 +200,6 @@ export default function BorrowerDashboard() {
                                     <span>{loan.interest_rate}% APR</span>
                                   </div>
                                 </div>
-                                <div className="flex gap-2">
-                                  {loan.status === "PENDING" && remaining > 0 && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => router.push(`/dashboard/loans/${loan.loan_id}#add-lenders`)}
-                                    >
-                                      <Users className="mr-2 h-4 w-4" />
-                                      Add Holders
-                                    </Button>
-                                  )}
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => router.push(`/dashboard/loans/${loan.loan_id}`)}
-                                  >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
-                                  </Button>
-                                </div>
                               </div>
 
                               {/* Funding Progress Bar */}
@@ -190,74 +207,136 @@ export default function BorrowerDashboard() {
                                 <div className="flex items-center justify-between text-sm">
                                   <span className="font-medium">Invited Amount</span>
                                   <span className="text-muted-foreground">
-                                    ${totalInvited.toLocaleString()} / ${loan.amount.toLocaleString()}
+                                    ${totalInvited.toLocaleString()} / ${loan.amount.toLocaleString()} ({fundingPercentage.toFixed(0)}%)
                                   </span>
                                 </div>
                                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                                   <div
-                                    className="h-full bg-primary transition-all"
-                                    style={{ width: `${Math.min(fundingPercentage, 100)}%` }}
+                                    className="h-full transition-all duration-700 ease-out"
+                                    style={{
+                                      width: `${Math.min(fundingPercentage, 100)}%`,
+                                      background: fundingPercentage >= 80
+                                        ? 'linear-gradient(to right, #34D399, #14B8A6)'
+                                        : fundingPercentage >= 50
+                                        ? 'linear-gradient(to right, #FBBF24, #FB923C)'
+                                        : 'linear-gradient(to right, #94A3B8, #64748B)'
+                                    }}
                                   />
                                 </div>
-                                {remaining > 0 && (
-                                  <p className="text-sm text-muted-foreground">
-                                    ${remaining.toLocaleString()} remaining to invite
-                                  </p>
-                                )}
+                                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                  <span>{acceptedCount} of {participantCount} funded</span>
+                                  {remaining > 0 && (
+                                    <span>${remaining.toLocaleString()} remaining</span>
+                                  )}
+                                </div>
                               </div>
 
-                              {/* Lenders List */}
-                              {loan.participants && loan.participants.length > 0 ? (
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium">Note Holders</span>
-                                    <span className="text-sm text-muted-foreground">
-                                      {loan.accepted_participants} of {loan.participant_count} funded
-                                    </span>
-                                  </div>
-                                  <div className="space-y-2">
-                                    {loan.participants.map((participant, idx) => (
-                                      <div
-                                        key={participant.lender_id}
-                                        className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
-                                            {participant.lender_name?.charAt(0).toUpperCase() || (idx + 1)}
-                                          </div>
-                                          <div>
-                                            <p className="text-sm font-medium">
-                                              {participant.lender_name || 'Pending Acceptance'}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                              {participant.lender_email || 'Email not available'}
-                                            </p>
-                                          </div>
-                                        </div>
-                                        <div className="text-right">
-                                          <p className="text-sm font-semibold">
-                                            ${participant.contribution_amount.toLocaleString()}
-                                          </p>
-                                          <Badge
-                                            variant="secondary"
-                                            className={
-                                              participant.status === "ACCEPTED"
-                                                ? "bg-green-100 text-green-800 text-xs"
-                                                : "bg-yellow-100 text-yellow-800 text-xs"
-                                            }
-                                          >
-                                            {participant.status === "ACCEPTED" ? "✓ Funded" : "⏳ Pending"}
-                                          </Badge>
-                                        </div>
+                              {/* Action Buttons Row */}
+                              <div className="flex gap-2 pt-2">
+                                {participantCount > 0 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleLoanExpansion(loan.loan_id)}
+                                    className="flex-1"
+                                  >
+                                    {isExpanded ? (
+                                      <>
+                                        <ChevronUp className="mr-2 h-4 w-4" />
+                                        Hide Holders ({participantCount})
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="mr-2 h-4 w-4" />
+                                        Show Holders ({participantCount})
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                                {loan.status === "PENDING" && remaining > 0 && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedLoan(loan)
+                                      setIsAddHoldersModalOpen(true)
+                                    }}
+                                  >
+                                    <Users className="mr-2 h-4 w-4" />
+                                    Add Holders
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/dashboard/loans/${loan.loan_id}`)}
+                                >
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View Receipt
+                                </Button>
+                              </div>
+
+                              {/* Collapsible Lenders List */}
+                              {isExpanded && (
+                                <div
+                                  className="space-y-3 pt-4 border-t"
+                                  style={{
+                                    animation: 'slideInFromTop 300ms ease-out'
+                                  }}
+                                >
+                                  {loan.participants && loan.participants.length > 0 ? (
+                                    <>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium">Note Holders</span>
+                                        <span className="text-sm text-muted-foreground">
+                                          {acceptedCount} of {participantCount} funded
+                                        </span>
                                       </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-center py-4 bg-muted/30 rounded-lg">
-                                  <p className="text-sm text-muted-foreground">
-                                    No holders invited yet
-                                  </p>
+                                      <div className="space-y-2">
+                                        {loan.participants.map((participant, idx) => (
+                                          <div
+                                            key={participant.lender_id}
+                                            className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                                          >
+                                            <div className="flex items-center gap-3">
+                                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
+                                                {participant.lender_name?.charAt(0).toUpperCase() || (idx + 1)}
+                                              </div>
+                                              <div>
+                                                <p className="text-sm font-medium">
+                                                  {participant.lender_name || 'Pending Acceptance'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  {participant.lender_email || 'Email not available'}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            <div className="text-right">
+                                              <p className="text-sm font-semibold">
+                                                ${participant.contribution_amount.toLocaleString()}
+                                              </p>
+                                              <Badge
+                                                className="border text-xs"
+                                                style={
+                                                  participant.status === "ACCEPTED"
+                                                    ? { backgroundColor: '#ECFDF5', color: '#047857', borderColor: '#A7F3D0' }
+                                                    : { backgroundColor: '#FFFBEB', color: '#B45309', borderColor: '#FDE68A' }
+                                                }
+                                              >
+                                                {participant.status === "ACCEPTED" ? "✓ Funded" : "⏳ Pending"}
+                                              </Badge>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-center py-4 bg-muted/30 rounded-lg">
+                                      <p className="text-sm text-muted-foreground">
+                                        No holders invited yet
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -288,6 +367,23 @@ export default function BorrowerDashboard() {
           </div>
         </div>
       </main>
+
+      {/* Add Holders Modal */}
+      {selectedLoan && (
+        <AddHoldersModal
+          loan={selectedLoan}
+          isOpen={isAddHoldersModalOpen}
+          onClose={() => {
+            setIsAddHoldersModalOpen(false)
+            setSelectedLoan(null)
+          }}
+          onSuccess={() => {
+            setIsAddHoldersModalOpen(false)
+            setSelectedLoan(null)
+            refetch()
+          }}
+        />
+      )}
     </div>
   )
 }

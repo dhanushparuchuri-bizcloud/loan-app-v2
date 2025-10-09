@@ -118,6 +118,7 @@ export interface UserParticipation {
 export interface FundingProgress {
   total_amount: number
   total_funded: number
+  total_invited?: number
   remaining_amount: number
   funding_percentage: number
   is_fully_funded: boolean
@@ -230,6 +231,32 @@ export interface ACHDetails {
   routing_number: string
   account_number: string
   special_instructions?: string
+}
+
+export interface Lender {
+  lender_id: string
+  name: string
+  email: string
+  stats: {
+    investment_count: number
+    total_invested: number
+    average_investment: number
+    average_apr: number
+  }
+  last_investment: {
+    loan_name: string
+    amount: number
+    apr: number
+    status: string
+  } | null
+}
+
+export interface SearchLendersResponse {
+  success: boolean
+  data?: {
+    lenders: Lender[]
+    total_count: number
+  }
 }
 
 export interface CreateLoanRequest {
@@ -535,6 +562,12 @@ class ApiClient {
   async getLenderPortfolio(): Promise<LenderPortfolioResponse> {
     log.info('Fetching lender portfolio')
     return this.request<LenderPortfolioResponse>('/user/lender-portfolio')
+  }
+
+  async searchLenders(query: string = ''): Promise<SearchLendersResponse> {
+    log.info('Searching lenders', { query })
+    const params = query ? `?q=${encodeURIComponent(query)}` : ''
+    return this.request<SearchLendersResponse>(`/lenders/search${params}`)
   }
 }
 
