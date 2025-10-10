@@ -119,7 +119,7 @@ export default function ReceiptPage() {
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <Image
-                src="/ubertejas-ventures-logo.jpg"
+                src="/assets/ubertejas-ventures-logo.jpg"
                 alt="UbertejasVC Logo"
                 width={48}
                 height={48}

@@ -22,7 +22,7 @@ export default function HomePage() {
       <div className="animate-pulse">
         <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
           <Image
-            src="/ubertejas-ventures-logo.jpg"
+            src="/assets/ubertejas-ventures-logo.jpg"
             alt="UbertejasVC Logo"
             width={80}
             height={80}

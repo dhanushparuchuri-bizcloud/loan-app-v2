@@ -71,7 +71,7 @@ export default function RegisterPage() {
         <CardHeader className="text-center">
           <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center">
             <Image
-              src="/ubertejas-ventures-logo.jpg"
+              src="/assets/ubertejas-ventures-logo.jpg"
               alt="UbertejasVC Logo"
               width={64}
               height={64}

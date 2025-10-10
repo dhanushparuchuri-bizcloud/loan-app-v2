@@ -21,7 +21,7 @@ export function DashboardLoader({ type }: DashboardLoaderProps) {
         <div className="mb-8 animate-pulse">
           <div className="w-20 h-20 mx-auto flex items-center justify-center">
             <Image
-              src="/ubertejas-ventures-logo.jpg"
+              src="/assets/ubertejas-ventures-logo.jpg"
               alt="UbertejasVC Logo"
               width={80}
               height={80}

@@ -28,7 +28,7 @@ export function DashboardHeader({ currentRole, onRoleSwitch }: DashboardHeaderPr
         {/* Logo */}
         <div className="flex items-center space-x-4">
           <Image
-            src="/ubertejas-ventures-logo.jpg"
+            src="/assets/ubertejas-ventures-logo.jpg"
             alt="UbertejasVC Logo"
             width={32}
             height={32}
