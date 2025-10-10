@@ -362,7 +362,11 @@ def handle_get_lender_portfolio(event: Dict[str, Any], context: Any, user: Authe
                 interest_rate = float(loan['interest_rate'])
                 expected_annual_return = (contribution_amount * interest_rate) / 100
                 expected_monthly_return = expected_annual_return / 12
-                
+
+                # Get payment tracking fields from participation record
+                total_paid = float(participation.get('total_paid', 0))
+                remaining_balance = float(participation.get('remaining_balance', contribution_amount))
+
                 # Create portfolio item
                 portfolio_item = {
                     'loan_id': participation['loan_id'],
@@ -381,6 +385,8 @@ def handle_get_lender_portfolio(event: Dict[str, Any], context: Any, user: Authe
                     'funding_percentage': round((float(loan['total_funded']) / float(loan['amount'])) * 100, 2) if float(loan['amount']) > 0 else 0,
                     'expected_annual_return': expected_annual_return,
                     'expected_monthly_return': expected_monthly_return,
+                    'total_paid': total_paid,
+                    'remaining_balance': remaining_balance,
                     'created_at': loan['created_at']
                 }
                 

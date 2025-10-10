@@ -12,13 +12,19 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { StatsCard } from "@/components/stats-card"
 import { useAuth } from "@/lib/auth-context"
 import { useLenderDashboard } from "@/hooks/use-dashboard"
-import { DollarSign, TrendingUp, Clock, Bell, Eye, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
+import { DollarSign, TrendingUp, Clock, Bell, Eye, AlertCircle, ChevronDown, ChevronUp, FileCheck } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { PaymentReviewModal } from "@/components/payments/payment-review-modal"
+import { PaymentProgressBar } from "@/components/payments/payment-progress-bar"
+import { apiClient, type Payment } from "@/lib/api-client"
 
 export default function LenderDashboard() {
   const [isRoleSwitching, setIsRoleSwitching] = useState(false)
   const [statusFilter, setStatusFilter] = useState("all")
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
+  const [pendingPayments, setPendingPayments] = useState<{[loanId: string]: Payment[]}>({})
   const { user } = useAuth()
   const { lenderStats, invitations, portfolio, portfolioSummary, isLoading, error, refetch } = useLenderDashboard()
   const router = useRouter()
@@ -34,6 +40,40 @@ export default function LenderDashboard() {
       return
     }
   }, [user, router])
+
+  // Fetch pending payments for active portfolio items
+  useEffect(() => {
+    const fetchPendingPayments = async () => {
+      if (!user || !portfolio || portfolio.length === 0) return
+
+      console.log('[Lender Dashboard] Portfolio items:', portfolio.map(p => ({ loan_id: p.loan_id, status: p.participation_status, borrower: p.borrower_name })))
+
+      const paymentsMap: {[loanId: string]: Payment[]} = {}
+
+      for (const item of portfolio) {
+        if (item.participation_status === 'ACCEPTED') {
+          try {
+            const response = await apiClient.getPaymentsByLoan(item.loan_id)
+            console.log(`[Lender Dashboard] Payments for loan ${item.loan_id}:`, response.data.payments)
+            console.log(`[Lender Dashboard] Current user ID: ${user.user_id}`)
+            const lenderPayments = response.data.payments.filter(
+              (p: Payment) => p.lender_id === user.user_id && p.status === 'PENDING'
+            )
+            console.log(`[Lender Dashboard] Filtered pending payments:`, lenderPayments)
+            if (lenderPayments.length > 0) {
+              paymentsMap[item.loan_id] = lenderPayments
+            }
+          } catch (err) {
+            console.error(`Failed to fetch payments for loan ${item.loan_id}`, err)
+          }
+        }
+      }
+
+      setPendingPayments(paymentsMap)
+    }
+
+    fetchPendingPayments()
+  }, [portfolio, user])
 
   const handleRoleSwitch = () => {
     setIsRoleSwitching(true)
@@ -233,12 +273,18 @@ export default function LenderDashboard() {
         )}
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-3 mb-8">
+        <div className="grid gap-4 md:grid-cols-4 mb-8">
           <StatsCard
             title="Pending Invitations"
             value={lenderStats?.pending_invitations || 0}
             subtitle="Notes to review"
             icon={<Bell className="h-4 w-4 text-muted-foreground" />}
+          />
+          <StatsCard
+            title="Pending Payments"
+            value={Object.values(pendingPayments).reduce((sum, payments) => sum + payments.length, 0)}
+            subtitle="Payments to review"
+            icon={<FileCheck className="h-4 w-4 text-orange-600" />}
           />
           <StatsCard
             title="Active Investments"
@@ -299,9 +345,12 @@ export default function LenderDashboard() {
                       const contributionPercentage = item.loan_amount > 0
                         ? ((item.contribution_amount / item.loan_amount) * 100).toFixed(1)
                         : '0'
+                      const hasPendingPayments = pendingPayments[item.loan_id]?.length > 0
+                      const totalPaid = item.total_paid || 0
+                      const remainingBalance = item.remaining_balance || item.contribution_amount
 
                       return (
-                        <Card key={item.loan_id} className="overflow-hidden transition-all duration-200 hover:shadow-lg hover:border-primary/20">
+                        <Card key={item.loan_id} className={`overflow-hidden transition-all duration-200 hover:shadow-lg ${hasPendingPayments ? 'border-orange-200 bg-orange-50/30' : 'hover:border-primary/20'}`}>
                           <CardContent className="p-4">
                             <div className="space-y-3">
                               {/* Header */}
@@ -310,6 +359,12 @@ export default function LenderDashboard() {
                                   <div className="flex items-center gap-2 mb-1">
                                     <h4 className="font-semibold">{item.borrower_name}</h4>
                                     {getStatusBadge(item.participation_status)}
+                                    {hasPendingPayments && (
+                                      <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                                        <FileCheck className="mr-1 h-3 w-3" />
+                                        {pendingPayments[item.loan_id].length} to review
+                                      </Badge>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                     <span className="flex items-center gap-1">
@@ -324,6 +379,25 @@ export default function LenderDashboard() {
                                   </div>
                                 </div>
                               </div>
+
+                              {/* Payment Progress (ACCEPTED loans only) */}
+                              {item.participation_status === 'ACCEPTED' && (
+                                <div className="space-y-2 pt-2">
+                                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>Repayment Progress</span>
+                                  </div>
+                                  <PaymentProgressBar
+                                    totalPaid={totalPaid}
+                                    totalAmount={item.contribution_amount}
+                                    showLabels={false}
+                                    size="sm"
+                                  />
+                                  <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>Paid: ${totalPaid.toLocaleString()}</span>
+                                    <span>Remaining: ${remainingBalance.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              )}
 
                               {/* Key Metrics */}
                               <div className="grid grid-cols-2 gap-3 text-sm">
@@ -371,6 +445,20 @@ export default function LenderDashboard() {
 
                               {/* Action Buttons */}
                               <div className="flex gap-2 pt-2">
+                                {hasPendingPayments && (
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedPayment(pendingPayments[item.loan_id][0])
+                                      setIsPaymentModalOpen(true)
+                                    }}
+                                    className="bg-orange-600 hover:bg-orange-700"
+                                  >
+                                    <FileCheck className="mr-2 h-4 w-4" />
+                                    Review Payment
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -480,6 +568,43 @@ export default function LenderDashboard() {
           </div>
         </div>
       </main>
+
+      {/* Payment Review Modal */}
+      {selectedPayment && (
+        <PaymentReviewModal
+          open={isPaymentModalOpen}
+          onOpenChange={setIsPaymentModalOpen}
+          payment={selectedPayment}
+          borrowerName={portfolio.find(p => p.loan_id === selectedPayment.loan_id)?.borrower_name}
+          onSuccess={() => {
+            refetch()
+            setIsPaymentModalOpen(false)
+            // Refresh pending payments
+            const fetchPendingPayments = async () => {
+              if (!user) return
+
+              const paymentsMap: {[loanId: string]: Payment[]} = {}
+              for (const item of portfolio) {
+                if (item.participation_status === 'ACCEPTED') {
+                  try {
+                    const response = await apiClient.getPaymentsByLoan(item.loan_id)
+                    const lenderPayments = response.data.payments.filter(
+                      (p: Payment) => p.lender_id === user.user_id && p.status === 'PENDING'
+                    )
+                    if (lenderPayments.length > 0) {
+                      paymentsMap[item.loan_id] = lenderPayments
+                    }
+                  } catch (err) {
+                    console.error(`Failed to fetch payments for loan ${item.loan_id}`, err)
+                  }
+                }
+              }
+              setPendingPayments(paymentsMap)
+            }
+            fetchPendingPayments()
+          }}
+        />
+      )}
     </div>
   )
 }

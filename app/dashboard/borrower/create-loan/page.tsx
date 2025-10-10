@@ -10,10 +10,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Progress } from "@/components/ui/progress"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { useAuth } from "@/lib/auth-context"
-import { apiClient } from "@/lib/api-client"
-import { ArrowLeft, ArrowRight, Check, X, Plus } from "lucide-react"
+import { apiClient, type Lender } from "@/lib/api-client"
+import { ArrowLeft, ArrowRight, Check, X, Plus, Search } from "lucide-react"
 
 interface EntityDetails {
   entity_name: string
@@ -67,6 +69,10 @@ export default function CreateLoanPage() {
   const [newLenderName, setNewLenderName] = useState("")
   const [newLenderEmail, setNewLenderEmail] = useState("")
   const [showNewLenderForm, setShowNewLenderForm] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<Lender[]>([])
+  const [selectedFromSearch, setSelectedFromSearch] = useState<Map<string, number>>(new Map())
+  const [isSearching, setIsSearching] = useState(false)
   const { user } = useAuth()
   const router = useRouter()
 
@@ -92,8 +98,84 @@ export default function CreateLoanPage() {
     }
   }
 
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query)
+    if (query.trim().length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      console.log('[CreateLoan] Searching for:', query)
+      const response = await apiClient.searchLenders(query)
+      console.log('[CreateLoan] Search response:', response)
+      if (response.success && response.data) {
+        setSearchResults(response.data.lenders || [])
+        console.log('[CreateLoan] Search results:', response.data.lenders)
+      }
+    } catch (error) {
+      console.error('[CreateLoan] Search error:', error)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const toggleSearchSelection = (lenderId: string, amount?: number) => {
+    const newMap = new Map(selectedFromSearch)
+    if (amount !== undefined) {
+      // Update amount for already selected lender
+      newMap.set(lenderId, amount)
+    } else {
+      // Toggle checkbox selection
+      if (newMap.has(lenderId)) {
+        newMap.delete(lenderId)
+      } else {
+        newMap.set(lenderId, 0)
+      }
+    }
+    setSelectedFromSearch(newMap)
+  }
+
+  const addSearchedLenders = () => {
+    const newLenders: SelectedLender[] = []
+    selectedFromSearch.forEach((amount, lenderId) => {
+      const lender = searchResults.find(l => l.lender_id === lenderId)
+      // Check if lender is already in the selected list (by ID or email)
+      const alreadySelected = selectedLenders.find(sl =>
+        sl.id === lenderId || sl.email.toLowerCase() === lender?.email.toLowerCase()
+      )
+
+      if (lender && !alreadySelected) {
+        newLenders.push({
+          id: lender.lender_id,
+          name: lender.name,
+          email: lender.email,
+          amount: amount
+        })
+      }
+    })
+
+    if (newLenders.length > 0) {
+      setSelectedLenders([...selectedLenders, ...newLenders])
+    }
+    setSelectedFromSearch(new Map())
+    setSearchQuery("")
+    setSearchResults([])
+  }
+
   const handleAddLender = () => {
     if (newLenderName && newLenderEmail) {
+      // Check if lender with this email already exists
+      const alreadyExists = selectedLenders.find(
+        sl => sl.email.toLowerCase() === newLenderEmail.toLowerCase()
+      )
+
+      if (alreadyExists) {
+        alert(`A note holder with email ${newLenderEmail} has already been added.`)
+        return
+      }
+
       const newLender: SelectedLender = {
         id: Date.now().toString(),
         name: newLenderName,
@@ -505,47 +587,108 @@ export default function CreateLoanPage() {
             {/* Step 2: Select Lenders */}
             {currentStep === 2 && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Add Note Holders</h3>
-                  <Button variant="outline" onClick={() => setShowNewLenderForm(!showNewLenderForm)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Invite New Note Holder
-                  </Button>
-                </div>
+                <Tabs defaultValue="search" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="search">Search Existing</TabsTrigger>
+                    <TabsTrigger value="invite">Invite New</TabsTrigger>
+                  </TabsList>
 
-                {showNewLenderForm && (
-                  <Card>
-                    <CardContent className="pt-6">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="lender-name">Name</Label>
-                          <Input
-                            id="lender-name"
-                            value={newLenderName}
-                            onChange={(e) => setNewLenderName(e.target.value)}
-                            placeholder="Note holder's name"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="lender-email">Email</Label>
-                          <Input
-                            id="lender-email"
-                            type="email"
-                            value={newLenderEmail}
-                            onChange={(e) => setNewLenderEmail(e.target.value)}
-                            placeholder="noteholder@example.com"
-                          />
-                        </div>
+                  <TabsContent value="search" className="space-y-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name or email..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+
+                    {isSearching && <p className="text-sm text-muted-foreground">Searching...</p>}
+
+                    {searchResults.length > 0 && (
+                      <div className="space-y-2">
+                        {searchResults.map((lender) => {
+                          const alreadyAdded = selectedLenders.find(sl =>
+                            sl.id === lender.lender_id || sl.email.toLowerCase() === lender.email.toLowerCase()
+                          )
+                          return (
+                            <Card key={lender.lender_id} className={alreadyAdded ? 'opacity-50 bg-gray-50' : ''}>
+                              <CardContent className="pt-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <Checkbox
+                                      checked={selectedFromSearch.has(lender.lender_id)}
+                                      onCheckedChange={() => toggleSearchSelection(lender.lender_id)}
+                                      disabled={!!alreadyAdded}
+                                    />
+                                    <div>
+                                      <p className="font-medium">
+                                        {lender.name}
+                                        {alreadyAdded && <span className="ml-2 text-xs text-green-600">✓ Already added</span>}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground">{lender.email}</p>
+                                    </div>
+                                  </div>
+                                  {selectedFromSearch.has(lender.lender_id) && !alreadyAdded && (
+                                    <div className="w-32">
+                                      <Input
+                                        type="number"
+                                        placeholder="Amount"
+                                        value={selectedFromSearch.get(lender.lender_id) || ""}
+                                        onChange={(e) => toggleSearchSelection(lender.lender_id, Number(e.target.value))}
+                                        className="text-right"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )
+                        })}
+                        {selectedFromSearch.size > 0 && (
+                          <Button onClick={addSearchedLenders} className="w-full">
+                            Add {selectedFromSearch.size} Selected Note Holder{selectedFromSearch.size > 1 ? 's' : ''}
+                          </Button>
+                        )}
                       </div>
-                      <div className="flex gap-2 mt-4">
-                        <Button onClick={handleAddLender}>Add Note Holder</Button>
-                        <Button variant="outline" onClick={() => setShowNewLenderForm(false)}>
-                          Cancel
-                        </Button>
+                    )}
+
+                    {searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No lenders found. Try inviting them as new note holders.
+                      </p>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="invite" className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="lender-name">Name</Label>
+                        <Input
+                          id="lender-name"
+                          value={newLenderName}
+                          onChange={(e) => setNewLenderName(e.target.value)}
+                          placeholder="Note holder's name"
+                        />
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
+                      <div className="space-y-2">
+                        <Label htmlFor="lender-email">Email</Label>
+                        <Input
+                          id="lender-email"
+                          type="email"
+                          value={newLenderEmail}
+                          onChange={(e) => setNewLenderEmail(e.target.value)}
+                          placeholder="noteholder@example.com"
+                        />
+                      </div>
+                    </div>
+                    <Button onClick={handleAddLender} disabled={!newLenderName || !newLenderEmail}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Note Holder
+                    </Button>
+                  </TabsContent>
+                </Tabs>
 
                 {/* Selected Lenders */}
                 <div className="space-y-4">

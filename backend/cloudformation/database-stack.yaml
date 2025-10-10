@@ -203,6 +203,93 @@ Resources:
         - Key: Application
           Value: marketplace
 
+  # Payments Table
+  PaymentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "marketplace-payments-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: payment_id
+          AttributeType: S
+        - AttributeName: loan_id
+          AttributeType: S
+        - AttributeName: lender_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: payment_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: LoanIndex
+          KeySchema:
+            - AttributeName: loan_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: LenderStatusIndex
+          KeySchema:
+            - AttributeName: lender_id
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
+  # Payment Receipts S3 Bucket
+  PaymentReceiptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "payment-receipts-${Environment}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedHeaders:
+              - "*"
+            ExposedHeaders:
+              - ETag
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldReceipts
+            Status: Enabled
+            ExpirationInDays: 2555
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
 Outputs:
   UsersTable:
     Description: Users table name
@@ -263,3 +350,27 @@ Outputs:
     Value: !GetAtt ACHDetailsTable.Arn
     Export:
       Name: !Sub "${AWS::StackName}-ACHDetailsTableArn"
+
+  PaymentsTable:
+    Description: Payments table name
+    Value: !Ref PaymentsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PaymentsTable"
+
+  PaymentsTableArn:
+    Description: Payments table ARN
+    Value: !GetAtt PaymentsTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PaymentsTableArn"
+
+  PaymentReceiptsBucket:
+    Description: Payment receipts S3 bucket name
+    Value: !Ref PaymentReceiptsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-PaymentReceiptsBucket"
+
+  PaymentReceiptsBucketArn:
+    Description: Payment receipts S3 bucket ARN
+    Value: !GetAtt PaymentReceiptsBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-PaymentReceiptsBucketArn"

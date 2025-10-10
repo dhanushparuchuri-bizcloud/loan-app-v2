@@ -19,7 +19,8 @@ TABLE_NAMES = {
     'LOANS': os.environ['LOANS_TABLE'],
     'LOAN_PARTICIPANTS': os.environ['LOAN_PARTICIPANTS_TABLE'],
     'INVITATIONS': os.environ['INVITATIONS_TABLE'],
-    'ACH_DETAILS': os.environ['ACH_DETAILS_TABLE']
+    'ACH_DETAILS': os.environ['ACH_DETAILS_TABLE'],
+    'PAYMENTS': os.environ.get('PAYMENTS_TABLE', '')
 }
 
 

@@ -321,6 +321,8 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
                 'status': user_participation['status'],
                 'invited_at': user_participation['invited_at'],
                 'responded_at': user_participation.get('responded_at'),
+                'total_paid': user_participation.get('total_paid', 0),
+                'remaining_balance': user_participation.get('remaining_balance', user_participation['contribution_amount']),
                 'payment_amount': lender_payments['payment_amount'],
                 'total_interest': lender_payments['total_interest'],
                 'total_repayment': lender_payments['total_repayment'],
@@ -470,7 +472,9 @@ def handle_get_my_loans(event: Dict[str, Any]) -> Dict[str, Any]:
                         'lender_name': p.get('lender_name'),
                         'lender_email': p.get('lender_email'),
                         'contribution_amount': float(p['contribution_amount']),
-                        'status': p['status']
+                        'status': p['status'],
+                        'total_paid': float(p.get('total_paid', 0)),
+                        'remaining_balance': float(p.get('remaining_balance', p['contribution_amount']))
                     }
                     for p in participants
                 ]
@@ -678,7 +682,10 @@ def get_filtered_participant_data(loan_id: str, requesting_user_id: str, request
                     'contribution_amount': float(participant['contribution_amount']),
                     'status': participant['status'],
                     'invited_at': participant['invited_at'],
-                    'responded_at': participant.get('responded_at')
+                    'responded_at': participant.get('responded_at'),
+                    # Payment tracking fields
+                    'total_paid': float(participant.get('total_paid', 0)),
+                    'remaining_balance': float(participant.get('remaining_balance', participant['contribution_amount']))
                 }
                 
                 # Include ACH details for accepted participants (needed for repayment by borrowers)
@@ -774,9 +781,12 @@ def get_loan_participants(loan_id: str) -> List[Dict[str, Any]]:
                     'contribution_amount': float(participant['contribution_amount']),
                     'status': participant['status'],
                     'invited_at': participant['invited_at'],
-                    'responded_at': participant.get('responded_at')
+                    'responded_at': participant.get('responded_at'),
+                    # Payment tracking fields
+                    'total_paid': float(participant.get('total_paid', 0)),
+                    'remaining_balance': float(participant.get('remaining_balance', participant['contribution_amount']))
                 }
-                
+
                 # Include ACH details for accepted participants (needed for repayment)
                 if participant['status'] == ParticipantStatus.ACCEPTED:
                     ach_details = DynamoDBHelper.get_item(

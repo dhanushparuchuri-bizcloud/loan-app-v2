@@ -11,13 +11,16 @@ import { StatsCard } from "@/components/stats-card"
 import { AddHoldersModal } from "@/components/add-holders-modal"
 import { useAuth } from "@/lib/auth-context"
 import { useDashboard } from "@/hooks/use-dashboard"
-import { DollarSign, TrendingUp, Clock, Plus, Eye, AlertCircle, Users, ChevronDown, ChevronUp } from "lucide-react"
+import { DollarSign, TrendingUp, Clock, Plus, Eye, AlertCircle, Users, ChevronDown, ChevronUp, Receipt } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { RecordPaymentModal } from "@/components/payments/record-payment-modal"
+import { PaymentProgressBar } from "@/components/payments/payment-progress-bar"
 
 export default function BorrowerDashboard() {
   const [isRoleSwitching, setIsRoleSwitching] = useState(false)
   const [selectedLoan, setSelectedLoan] = useState<any>(null)
   const [isAddHoldersModalOpen, setIsAddHoldersModalOpen] = useState(false)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   const [expandedLoans, setExpandedLoans] = useState<Set<string>>(new Set())
   const { user } = useAuth()
   const { borrowerStats, loans, isLoading, error, refetch } = useDashboard()
@@ -231,8 +234,48 @@ export default function BorrowerDashboard() {
                                 </div>
                               </div>
 
+                              {/* Payment Progress (Active Loans Only) */}
+                              {loan.status === "ACTIVE" && acceptedCount > 0 && loan.participants && loan.participants.length > 0 && (
+                                <div className="space-y-2 pt-2">
+                                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>Repayment Progress</span>
+                                  </div>
+                                  {loan.participants.map((participant: any) => (
+                                    participant.status === 'ACCEPTED' && (
+                                      <div key={participant.lender_id} className="space-y-1">
+                                        <p className="text-xs font-medium">{participant.lender_name}</p>
+                                        <PaymentProgressBar
+                                          totalPaid={participant.total_paid || 0}
+                                          totalAmount={participant.contribution_amount}
+                                          showLabels={false}
+                                          size="sm"
+                                        />
+                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                          <span>Paid: ${(participant.total_paid || 0).toLocaleString()}</span>
+                                          <span>Remaining: ${(participant.remaining_balance || participant.contribution_amount).toLocaleString()}</span>
+                                        </div>
+                                      </div>
+                                    )
+                                  ))}
+                                </div>
+                              )}
+
                               {/* Action Buttons Row */}
                               <div className="flex gap-2 pt-2">
+                                {loan.status === "ACTIVE" && acceptedCount > 0 && (
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedLoan(loan)
+                                      setIsPaymentModalOpen(true)
+                                    }}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    <Receipt className="mr-2 h-4 w-4" />
+                                    Record Payment
+                                  </Button>
+                                )}
                                 {participantCount > 0 && (
                                   <Button
                                     variant="ghost"
@@ -272,7 +315,7 @@ export default function BorrowerDashboard() {
                                   onClick={() => router.push(`/dashboard/loans/${loan.loan_id}`)}
                                 >
                                   <Eye className="mr-2 h-4 w-4" />
-                                  View Receipt
+                                  View Details
                                 </Button>
                               </div>
 
@@ -381,6 +424,20 @@ export default function BorrowerDashboard() {
             setIsAddHoldersModalOpen(false)
             setSelectedLoan(null)
             refetch()
+          }}
+        />
+      )}
+
+      {/* Record Payment Modal */}
+      {selectedLoan && (
+        <RecordPaymentModal
+          open={isPaymentModalOpen}
+          onOpenChange={setIsPaymentModalOpen}
+          loanId={selectedLoan.loan_id}
+          lenders={selectedLoan.participants?.filter((p: any) => p.status === 'ACCEPTED') || []}
+          onSuccess={() => {
+            refetch()
+            setIsPaymentModalOpen(false)
           }}
         />
       )}

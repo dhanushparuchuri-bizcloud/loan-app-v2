@@ -1,0 +1,9 @@
+UPLOAD_URL_REQ=$(curl -s -X POST "${API_URL}/payments/receipt-upload-url" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${BORROWER_TOKEN}" \
+  -d "{
+    \"loan_id\": \"${LOAN_ID}\",
+    \"lender_id\": \"${LENDER_ID}\",
+    \"file_name\": \"payment-receipt-1.jpg\",
+    \"file_type\": \"image/jpeg\"
+  }")

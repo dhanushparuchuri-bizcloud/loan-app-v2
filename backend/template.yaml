@@ -29,7 +29,7 @@ Globals:
       Variables:
         ENVIRONMENT: !Ref Environment
         JWT_SECRET: !Ref JWTSecret
-        USERS_TABLE: 
+        USERS_TABLE:
           Fn::ImportValue: !Sub "${DatabaseStackName}-UsersTable"
         LOANS_TABLE:
           Fn::ImportValue: !Sub "${DatabaseStackName}-LoansTable"
@@ -39,6 +39,10 @@ Globals:
           Fn::ImportValue: !Sub "${DatabaseStackName}-InvitationsTable"
         ACH_DETAILS_TABLE:
           Fn::ImportValue: !Sub "${DatabaseStackName}-ACHDetailsTable"
+        PAYMENTS_TABLE:
+          Fn::ImportValue: !Sub "${DatabaseStackName}-PaymentsTable"
+        RECEIPTS_BUCKET:
+          Fn::ImportValue: !Sub "${DatabaseStackName}-PaymentReceiptsBucket"
   Api:
     Cors:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
@@ -211,6 +215,69 @@ Resources:
             RestApiId: !Ref MarketplaceApi
             Path: /user/lender-portfolio
             Method: get
+
+  PaymentHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "marketplace-payment-handler-${Environment}"
+      CodeUri: src/handlers/payment_handler/
+      Handler: index.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName:
+              Fn::ImportValue: !Sub "${DatabaseStackName}-PaymentsTable"
+        - DynamoDBCrudPolicy:
+            TableName:
+              Fn::ImportValue: !Sub "${DatabaseStackName}-LoansTable"
+        - DynamoDBCrudPolicy:
+            TableName:
+              Fn::ImportValue: !Sub "${DatabaseStackName}-LoanParticipantsTable"
+        - S3CrudPolicy:
+            BucketName:
+              Fn::ImportValue: !Sub "${DatabaseStackName}-PaymentReceiptsBucket"
+      Events:
+        SubmitPaymentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /payments
+            Method: post
+        GetUploadUrlApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /payments/receipt-upload-url
+            Method: post
+        ListPaymentsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /payments/loan/{loan_id}
+            Method: get
+        GetPaymentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /payments/{payment_id}
+            Method: get
+        GetReceiptUrlApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /payments/{payment_id}/receipt-url
+            Method: get
+        ApprovePaymentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /payments/{payment_id}/approve
+            Method: put
+        RejectPaymentApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref MarketplaceApi
+            Path: /payments/{payment_id}/reject
+            Method: put
 
 Outputs:
   MarketplaceApiUrl:

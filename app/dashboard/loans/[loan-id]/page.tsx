@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { DashboardLoader } from "@/components/dashboard-loader"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { AddHoldersModal } from "@/components/add-holders-modal"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient, type Loan } from "@/lib/api-client"
 import { ArrowLeft, DollarSign, Calendar, TrendingUp, Users, FileText, Clock, Printer, AlertCircle, Plus, X } from "lucide-react"
@@ -170,6 +171,7 @@ export default function LoanDetailsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loan, setLoan] = useState<Loan | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isAddHoldersOpen, setIsAddHoldersOpen] = useState(false)
   const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
@@ -184,16 +186,10 @@ export default function LoanDetailsPage() {
     fetchLoanDetails()
   }, [user, router, loanId])
 
-  // Check for hash in URL to auto-open add lenders form
+  // Check for hash in URL to auto-open add holders modal
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hash === '#add-lenders') {
-      setTimeout(() => {
-        const addLendersSection = document.getElementById('add-lenders-section')
-        if (addLendersSection) {
-          addLendersSection.classList.remove('hidden')
-          addLendersSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }, 500)
+    if (typeof window !== 'undefined' && window.location.hash === '#add-lenders' && loan) {
+      setIsAddHoldersOpen(true)
     }
   }, [loan])
 
@@ -481,13 +477,7 @@ export default function LoanDetailsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          // Toggle add lenders form
-                          const addLendersSection = document.getElementById('add-lenders-section')
-                          if (addLendersSection) {
-                            addLendersSection.classList.toggle('hidden')
-                          }
-                        }}
+                        onClick={() => setIsAddHoldersOpen(true)}
                       >
                         <Users className="mr-2 h-4 w-4" />
                         Add Holders
@@ -496,18 +486,6 @@ export default function LoanDetailsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {/* Add Lenders Form - Only for PENDING loans */}
-                  {loan.status === "PENDING" && (
-                    <div id="add-lenders-section" className="hidden mb-6 p-4 border rounded-lg bg-muted/30">
-                      <AddLendersForm
-                        loanId={loan.loan_id}
-                        loanAmount={loan.amount}
-                        currentInvited={participants.reduce((sum, p) => sum + p.contribution_amount, 0)}
-                        onSuccess={fetchLoanDetails}
-                      />
-                    </div>
-                  )}
-
                   {participants.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">No note holders yet</p>
@@ -804,6 +782,19 @@ export default function LoanDetailsPage() {
           </div>
         </div>
       </main>
+
+      {/* Add Holders Modal */}
+      {isBorrower && loan && (
+        <AddHoldersModal
+          loan={loan}
+          isOpen={isAddHoldersOpen}
+          onClose={() => setIsAddHoldersOpen(false)}
+          onSuccess={() => {
+            fetchLoanDetails()
+            setIsAddHoldersOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -108,6 +108,8 @@ export interface UserParticipation {
   status: string
   invited_at: string
   responded_at?: string | null
+  total_paid: number           // NEW: Total amount paid to this lender
+  remaining_balance: number    // NEW: Remaining balance for this lender
   payment_amount: number
   total_interest: number
   total_repayment: number
@@ -372,6 +374,109 @@ export interface LenderPortfolioResponse {
   message?: string
 }
 
+// Payment interfaces
+export interface Payment {
+  payment_id: string
+  loan_id: string
+  borrower_id: string
+  lender_id: string
+  amount: number
+  payment_date: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  receipt_key?: string
+  receipt_url?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  approved_at?: string
+  approved_by?: string
+  approval_notes?: string
+  rejected_at?: string
+  rejected_by?: string
+  rejection_reason?: string
+}
+
+export interface ReceiptUploadUrlResponse {
+  success: boolean
+  data: {
+    upload_url: string
+    file_key: string
+    payment_id: string
+    expires_at: string
+  }
+  message?: string
+}
+
+export interface SubmitPaymentRequest {
+  loan_id: string
+  lender_id: string
+  amount: number
+  payment_date: string
+  notes?: string
+  receipt_key?: string
+}
+
+export interface SubmitPaymentResponse {
+  success: boolean
+  data: {
+    payment: Payment
+    message: string
+  }
+  message?: string
+}
+
+export interface GetPaymentResponse {
+  success: boolean
+  data: {
+    payment: Payment
+  }
+  message?: string
+}
+
+export interface ListPaymentsResponse {
+  success: boolean
+  data: {
+    payments: Payment[]
+  }
+  message?: string
+}
+
+export interface ReceiptUrlResponse {
+  success: boolean
+  data: {
+    url: string
+    expires_at: string
+  }
+  message?: string
+}
+
+export interface ApprovePaymentRequest {
+  notes?: string
+}
+
+export interface ApprovePaymentResponse {
+  success: boolean
+  data: {
+    message: string
+    payment_id: string
+  }
+  message?: string
+}
+
+export interface RejectPaymentRequest {
+  reason: string
+}
+
+export interface RejectPaymentResponse {
+  success: boolean
+  data: {
+    message: string
+    payment_id: string
+    rejection_reason: string
+  }
+  message?: string
+}
+
 // Error response format
 export interface ApiError {
   success: false
@@ -568,6 +673,92 @@ class ApiClient {
     log.info('Searching lenders', { query })
     const params = query ? `?q=${encodeURIComponent(query)}` : ''
     return this.request<SearchLendersResponse>(`/lenders/search${params}`)
+  }
+
+  // Payment endpoints
+  async getPaymentUploadUrl(
+    loanId: string,
+    lenderId: string,
+    fileName: string,
+    fileType: string
+  ): Promise<ReceiptUploadUrlResponse> {
+    log.info('Getting payment receipt upload URL', { loanId, lenderId, fileName })
+
+    return this.request<ReceiptUploadUrlResponse>('/payments/receipt-upload-url', {
+      method: 'POST',
+      body: JSON.stringify({
+        loan_id: loanId,
+        lender_id: lenderId,
+        file_name: fileName,
+        file_type: fileType
+      }),
+    })
+  }
+
+  async uploadReceipt(uploadUrl: string, file: File): Promise<void> {
+    log.info('Uploading receipt to S3', { fileName: file.name, size: file.size })
+
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+      },
+    })
+
+    if (!response.ok) {
+      log.error('Receipt upload failed', { status: response.status })
+      throw new Error(`Upload failed: ${response.statusText}`)
+    }
+
+    log.info('Receipt uploaded successfully')
+  }
+
+  async submitPayment(paymentData: SubmitPaymentRequest): Promise<SubmitPaymentResponse> {
+    log.info('Submitting payment', {
+      loanId: paymentData.loan_id,
+      lenderId: paymentData.lender_id,
+      amount: paymentData.amount,
+      hasReceipt: !!paymentData.receipt_key
+    })
+
+    return this.request<SubmitPaymentResponse>('/payments', {
+      method: 'POST',
+      body: JSON.stringify(paymentData),
+    })
+  }
+
+  async getPayment(paymentId: string): Promise<GetPaymentResponse> {
+    log.info('Fetching payment details', { paymentId })
+    return this.request<GetPaymentResponse>(`/payments/${paymentId}`)
+  }
+
+  async getPaymentsByLoan(loanId: string): Promise<ListPaymentsResponse> {
+    log.info('Fetching payments for loan', { loanId })
+    return this.request<ListPaymentsResponse>(`/payments/loan/${loanId}`)
+  }
+
+  async getReceiptUrl(paymentId: string): Promise<ReceiptUrlResponse> {
+    log.info('Getting receipt download URL', { paymentId })
+    return this.request<ReceiptUrlResponse>(`/payments/${paymentId}/receipt-url`)
+  }
+
+  async approvePayment(paymentId: string, notes?: string): Promise<ApprovePaymentResponse> {
+    log.info('Approving payment', { paymentId, hasNotes: !!notes })
+
+    return this.request<ApprovePaymentResponse>(`/payments/${paymentId}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ notes: notes || '' }),
+    })
+  }
+
+  async rejectPayment(paymentId: string, reason: string): Promise<RejectPaymentResponse> {
+    log.info('Rejecting payment', { paymentId })
+
+    return this.request<RejectPaymentResponse>(`/payments/${paymentId}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ reason }),
+    })
   }
 }
 
