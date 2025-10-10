@@ -3,11 +3,12 @@ frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
+        - npm install -g pnpm@latest
+        - pnpm install --no-frozen-lockfile
     build:
       commands:
         - echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" >> .env.local
-        - npm run build
+        - pnpm build
   artifacts:
     baseDirectory: .next
     files:
