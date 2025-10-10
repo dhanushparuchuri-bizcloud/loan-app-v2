@@ -3,22 +3,15 @@ frontend:
   phases:
     preBuild:
       commands:
-        - echo "Installing dependencies..."
-        - npm install -g pnpm
-        - pnpm install --frozen-lockfile
+        - npm ci
     build:
       commands:
-        - echo "Building Next.js application..."
         - echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" >> .env.local
-        - pnpm build
-        - echo "Build completed successfully"
+        - npm run build
   artifacts:
-    baseDirectory: .
+    baseDirectory: .next
     files:
-      - '.next/**/*'
-      - 'public/**/*'
-      - 'node_modules/**/*'
-      - 'package.json'
+      - '**/*'
   cache:
     paths:
       - node_modules/**/*
