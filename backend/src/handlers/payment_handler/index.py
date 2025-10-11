@@ -149,6 +149,23 @@ def handle_submit_payment(event: Dict[str, Any]) -> Dict[str, Any]:
         if participant['status'] != ParticipantStatus.ACCEPTED:
             return ResponseHelper.validation_error_response('Lender must have accepted the loan')
 
+        # Check for duplicate pending payment (same loan/lender/amount/date)
+        existing_payments = DynamoDBHelper.query_items(
+            TABLE_NAMES['PAYMENTS'],
+            'loan_id = :loan_id',
+            {':loan_id': loan_id},
+            'LoanIndex'
+        )
+
+        for existing_payment in existing_payments:
+            if (existing_payment.get('lender_id') == lender_id and
+                existing_payment.get('amount') == amount_decimal and
+                existing_payment.get('payment_date') == payment_date and
+                existing_payment.get('status') == PaymentStatus.PENDING):
+                return ResponseHelper.validation_error_response(
+                    'A pending payment with the same details already exists'
+                )
+
         # Calculate remaining balance
         contribution = Decimal(str(participant['contribution_amount']))
         total_paid = Decimal(str(participant.get('total_paid', 0)))
@@ -382,30 +399,23 @@ def handle_approve_payment(event: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
-        # Update participant's total_paid and remaining_balance
+        # Update participant's total_paid and remaining_balance atomically
         participant_key = {
             'loan_id': payment['loan_id'],
             'lender_id': payment['lender_id']
         }
 
-        participant = DynamoDBHelper.get_item(TABLE_NAMES['LOAN_PARTICIPANTS'], participant_key)
-        if participant:
-            current_total_paid = Decimal(str(participant.get('total_paid', 0)))
-            payment_amount = Decimal(str(payment['amount']))
-            new_total_paid = current_total_paid + payment_amount
+        payment_amount = Decimal(str(payment['amount']))
 
-            contribution = Decimal(str(participant['contribution_amount']))
-            new_remaining = contribution - new_total_paid
-
-            DynamoDBHelper.update_item(
-                TABLE_NAMES['LOAN_PARTICIPANTS'],
-                participant_key,
-                'SET total_paid = :total_paid, remaining_balance = :remaining_balance',
-                {
-                    ':total_paid': new_total_paid,
-                    ':remaining_balance': new_remaining
-                }
-            )
+        # Use atomic ADD and SUB operations to prevent race conditions
+        DynamoDBHelper.update_item(
+            TABLE_NAMES['LOAN_PARTICIPANTS'],
+            participant_key,
+            'ADD total_paid :payment_amount SET remaining_balance = remaining_balance - :payment_amount',
+            {
+                ':payment_amount': payment_amount
+            }
+        )
 
         logger.info(f"Payment {payment_id} approved by {user.user_id}")
 

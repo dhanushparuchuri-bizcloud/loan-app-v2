@@ -147,6 +147,8 @@ Resources:
           AttributeType: S
         - AttributeName: created_at
           AttributeType: S
+        - AttributeName: loan_id
+          AttributeType: S
       KeySchema:
         - AttributeName: invitation_id
           KeyType: HASH
@@ -162,6 +164,14 @@ Resources:
         - IndexName: StatusIndex
           KeySchema:
             - AttributeName: status
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: LoanIndex
+          KeySchema:
+            - AttributeName: loan_id
               KeyType: HASH
             - AttributeName: created_at
               KeyType: RANGE
@@ -244,6 +254,27 @@ Resources:
         StreamViewType: NEW_AND_OLD_IMAGES
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: marketplace
+
+  # Idempotency Keys Table
+  IdempotencyKeysTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "marketplace-idempotency-keys-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: idempotency_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: idempotency_key
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -374,3 +405,15 @@ Outputs:
     Value: !GetAtt PaymentReceiptsBucket.Arn
     Export:
       Name: !Sub "${AWS::StackName}-PaymentReceiptsBucketArn"
+
+  IdempotencyKeysTable:
+    Description: Idempotency keys table name
+    Value: !Ref IdempotencyKeysTable
+    Export:
+      Name: !Sub "${AWS::StackName}-IdempotencyKeysTable"
+
+  IdempotencyKeysTableArn:
+    Description: Idempotency keys table ARN
+    Value: !GetAtt IdempotencyKeysTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-IdempotencyKeysTableArn"

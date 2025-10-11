@@ -72,19 +72,19 @@ class PaymentCalculator:
     def calculate_lender_payments(
         contribution_amount: float,
         annual_rate: float,
-        payment_frequency: str,
-        total_payments: int
+        total_payments: int,
+        payment_frequency: str
     ) -> Dict[str, float]:
         """
         Calculate payment details for a specific lender based on their contribution.
         Uses proper amortization formula for installment loans.
-        
+
         Args:
             contribution_amount: Lender's contribution to the loan
             annual_rate: Annual interest rate (e.g., 0.085 for 8.5%)
-            payment_frequency: Payment frequency string
             total_payments: Total number of payments
-            
+            payment_frequency: Payment frequency string
+
         Returns:
             Dict containing payment_amount, total_interest, total_repayment
         """
@@ -347,17 +347,17 @@ if __name__ == "__main__":
         lender_a = PaymentCalculator.calculate_lender_payments(
             contribution_amount=20000,
             annual_rate=0.085,
-            payment_frequency='Monthly',
-            total_payments=loan_terms['total_payments']
+            total_payments=loan_terms['total_payments'],
+            payment_frequency='Monthly'
         )
         print("Lender A Payments:", lender_a)
-        
+
         # Calculate Lender B payments ($30,000)
         lender_b = PaymentCalculator.calculate_lender_payments(
             contribution_amount=30000,
             annual_rate=0.085,
-            payment_frequency='Monthly',
-            total_payments=loan_terms['total_payments']
+            total_payments=loan_terms['total_payments'],
+            payment_frequency='Monthly'
         )
         print("Lender B Payments:", lender_b)
         

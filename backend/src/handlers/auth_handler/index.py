@@ -350,39 +350,59 @@ def update_participant_records(email: str, user_id: str, updated_at: str) -> Non
     try:
         # Find all participant records with pending lender_id for this email
         pending_lender_id = f"pending:{email}"
-        
-        # Scan for participant records with this pending lender_id
-        # Note: This is not the most efficient approach, but it's simple and works for MVP
-        all_participants = DynamoDBHelper.scan_items(
+
+        # Use LenderIndex GSI to query efficiently instead of scan
+        all_participants = DynamoDBHelper.query_items(
             TABLE_NAMES['LOAN_PARTICIPANTS'],
-            filter_expression='lender_id = :pending_lender_id',
-            expression_attribute_values={':pending_lender_id': pending_lender_id}
+            'lender_id = :pending_lender_id',
+            {':pending_lender_id': pending_lender_id},
+            'LenderIndex'
         )
-        
+
         logger.info(f"Found {len(all_participants)} participant records to update for {email}")
-        
+
         # Update each participant record
+        # Note: We use INSERT-first then DELETE pattern to minimize data loss risk
+        # If INSERT succeeds but DELETE fails, we have duplicate records (better than missing records)
+        # The system will handle duplicates via deduplication logic in queries
         for participant in all_participants:
             loan_id = participant['loan_id']
-            
-            # Delete the old record with pending lender_id
-            DynamoDBHelper.delete_item(
-                TABLE_NAMES['LOAN_PARTICIPANTS'],
-                {'loan_id': loan_id, 'lender_id': pending_lender_id}
-            )
-            
-            # Create new record with actual user_id
-            updated_participant = {
-                'loan_id': loan_id,
-                'lender_id': user_id,
-                'contribution_amount': participant['contribution_amount'],
-                'status': participant['status'],
-                'invited_at': participant['invited_at'],
-                'updated_at': updated_at
-            }
-            
-            DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], updated_participant)
-            logger.info(f"Updated participant record for loan {loan_id}: {pending_lender_id} -> {user_id}")
+
+            try:
+                # STEP 1: Create new record with actual user_id FIRST
+                updated_participant = {
+                    'loan_id': loan_id,
+                    'lender_id': user_id,
+                    'contribution_amount': participant['contribution_amount'],
+                    'status': participant['status'],
+                    'invited_at': participant['invited_at'],
+                    'updated_at': updated_at,
+                    'total_paid': participant.get('total_paid', Decimal('0')),
+                    'remaining_balance': participant.get('remaining_balance', participant['contribution_amount'])
+                }
+
+                DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], updated_participant)
+                logger.info(f"Created new participant record for loan {loan_id}: {user_id}")
+
+                # STEP 2: Delete the old record with pending lender_id ONLY after INSERT succeeds
+                try:
+                    DynamoDBHelper.delete_item(
+                        TABLE_NAMES['LOAN_PARTICIPANTS'],
+                        {'loan_id': loan_id, 'lender_id': pending_lender_id}
+                    )
+                    logger.info(f"Deleted old pending participant record for loan {loan_id}: {pending_lender_id}")
+                except Exception as delete_error:
+                    # If delete fails, we have duplicate records but participant is not lost
+                    # Log as warning, not error - duplicates will be handled by query dedup logic
+                    logger.warning(f"Failed to delete pending participant record for loan {loan_id}: {str(delete_error)}")
+                    logger.warning(f"Duplicate participant records may exist for loan {loan_id} - will be deduplicated in queries")
+
+            except Exception as insert_error:
+                # If INSERT fails, we don't delete anything - participant record remains with pending: prefix
+                # User can retry registration or support can manually fix
+                logger.error(f"Failed to create participant record for loan {loan_id}: {str(insert_error)}")
+                logger.error(f"Participant record remains as pending:{email} for loan {loan_id} - manual intervention may be required")
+                # Continue with other participants even if one fails
             
     except Exception as e:
         logger.error(f"Error updating participant records: {str(e)}")

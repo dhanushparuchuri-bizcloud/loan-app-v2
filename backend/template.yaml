@@ -43,6 +43,8 @@ Globals:
           Fn::ImportValue: !Sub "${DatabaseStackName}-PaymentsTable"
         RECEIPTS_BUCKET:
           Fn::ImportValue: !Sub "${DatabaseStackName}-PaymentReceiptsBucket"
+        IDEMPOTENCY_KEYS_TABLE:
+          Fn::ImportValue: !Sub "${DatabaseStackName}-IdempotencyKeysTable"
   Api:
     Cors:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
@@ -50,6 +52,19 @@ Globals:
       AllowOrigin: "'*'"
 
 Resources:
+  # Shared Lambda Layer
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub "marketplace-shared-layer-${Environment}"
+      Description: Shared utilities for all Lambda functions
+      ContentUri: layers/shared_layer/
+      CompatibleRuntimes:
+        - python3.11
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: makefile
+
   # API Gateway
   MarketplaceApi:
     Type: AWS::Serverless::Api
@@ -69,6 +84,8 @@ Resources:
       FunctionName: !Sub "marketplace-auth-handler-${Environment}"
       CodeUri: src/handlers/auth_handler/
       Handler: index.lambda_handler
+      Layers:
+        - !Ref SharedLayer
       Policies:
         - DynamoDBCrudPolicy:
             TableName: 
@@ -99,6 +116,8 @@ Resources:
       FunctionName: !Sub "marketplace-loan-handler-${Environment}"
       CodeUri: src/handlers/loan_handler/
       Handler: index.lambda_handler
+      Layers:
+        - !Ref SharedLayer
       Policies:
         - DynamoDBCrudPolicy:
             TableName:
@@ -115,6 +134,9 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName:
               Fn::ImportValue: !Sub "${DatabaseStackName}-ACHDetailsTable"
+        - DynamoDBCrudPolicy:
+            TableName:
+              Fn::ImportValue: !Sub "${DatabaseStackName}-IdempotencyKeysTable"
       Events:
         CreateLoanApi:
           Type: Api
@@ -147,6 +169,8 @@ Resources:
       FunctionName: !Sub "marketplace-lender-handler-${Environment}"
       CodeUri: src/handlers/lender_handler/
       Handler: index.lambda_handler
+      Layers:
+        - !Ref SharedLayer
       Policies:
         - DynamoDBCrudPolicy:
             TableName:
@@ -186,6 +210,8 @@ Resources:
       FunctionName: !Sub "marketplace-user-handler-${Environment}"
       CodeUri: src/handlers/user_handler/
       Handler: index.lambda_handler
+      Layers:
+        - !Ref SharedLayer
       Policies:
         - DynamoDBCrudPolicy:
             TableName:
@@ -222,6 +248,8 @@ Resources:
       FunctionName: !Sub "marketplace-payment-handler-${Environment}"
       CodeUri: src/handlers/payment_handler/
       Handler: index.lambda_handler
+      Layers:
+        - !Ref SharedLayer
       Policies:
         - DynamoDBCrudPolicy:
             TableName:

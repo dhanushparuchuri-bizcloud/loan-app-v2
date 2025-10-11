@@ -352,14 +352,16 @@ def accept_loan_atomic(
         # Determine new loan status
         loan_status = LoanStatus.ACTIVE if new_total_funded >= loan['amount'] else LoanStatus.PENDING
         
-        # Update participant status to ACCEPTED
+        # Update participant status to ACCEPTED and initialize payment tracking
         DynamoDBHelper.update_item(
             TABLE_NAMES['LOAN_PARTICIPANTS'],
             {'loan_id': loan_id, 'lender_id': lender_id},
-            'SET #status = :status, responded_at = :responded_at',
+            'SET #status = :status, responded_at = :responded_at, total_paid = if_not_exists(total_paid, :zero), remaining_balance = if_not_exists(remaining_balance, :contribution)',
             {
                 ':status': ParticipantStatus.ACCEPTED,
-                ':responded_at': now
+                ':responded_at': now,
+                ':zero': Decimal('0'),
+                ':contribution': contribution_amount
             },
             expression_attribute_names={'#status': 'status'}
         )
