@@ -63,8 +63,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         required_env_vars = ['LOANS_TABLE', 'LOAN_PARTICIPANTS_TABLE', 'INVITATIONS_TABLE', 'USERS_TABLE']
         for var in required_env_vars:
             if not os.environ.get(var):
-        logger.error(f"Missing required environment variable: {var}")
-        return ResponseHelper.internal_error_response(f"Configuration error: missing {var}")
+                logger.error(f"Missing required environment variable: {var}")
+                return ResponseHelper.internal_error_response(f"Configuration error: missing {var}")
         
         # Handle CORS preflight requests
         if event.get('httpMethod') == 'OPTIONS':
@@ -124,20 +124,20 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
         if idempotency_key:
             # Check if we've already processed this request
             existing_record = DynamoDBHelper.get_item(
-        TABLE_NAMES['IDEMPOTENCY_KEYS'],
-        {'idempotency_key': idempotency_key}
+                TABLE_NAMES['IDEMPOTENCY_KEYS'],
+                {'idempotency_key': idempotency_key}
             )
 
             if existing_record:
-        logger.info(f"Idempotency key {idempotency_key} already processed, returning cached response")
-        # Return the cached response (parse JSON string back to dict)
-        response_body = existing_record.get('response_body', '{}')
-        if isinstance(response_body, str):
-            response_body = json.loads(response_body)
-        return ResponseHelper.create_response(
-            existing_record.get('status_code', 201),
-            response_body
-        )
+                logger.info(f"Idempotency key {idempotency_key} already processed, returning cached response")
+                # Return the cached response (parse JSON string back to dict)
+                response_body = existing_record.get('response_body', '{}')
+                if isinstance(response_body, str):
+                    response_body = json.loads(response_body)
+                return ResponseHelper.create_response(
+                    existing_record.get('status_code', 201),
+                    response_body
+                )
 
             logger.info(f"Processing new idempotency key: {idempotency_key}")
         
@@ -152,23 +152,23 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
             seen = set()
             duplicate = None
             for email in lender_emails_lower:
-        if email in seen:
-            duplicate = email
-            break
-        seen.add(email)
+                if email in seen:
+                    duplicate = email
+                    break
+                seen.add(email)
             logger.warning(f"Duplicate lender email in request: {duplicate}")
             return ResponseHelper.validation_error_response(
-        f"Duplicate lender email in request: {duplicate}. Each lender can only be invited once per loan."
+                f"Duplicate lender email in request: {duplicate}. Each lender can only be invited once per loan."
             )
 
         # Validate that user is not inviting themselves as a lender
         user_email_lower = user.email.lower()
         for lender in request_data.lenders:
             if lender.email.lower() == user_email_lower:
-        logger.warning(f"User {user.user_id} attempted to invite themselves as lender: {lender.email}")
-        return ResponseHelper.validation_error_response(
-            "You cannot invite yourself as a lender to your own loan"
-        )
+                logger.warning(f"User {user.user_id} attempted to invite themselves as lender: {lender.email}")
+                return ResponseHelper.validation_error_response(
+                    "You cannot invite yourself as a lender to your own loan"
+                )
         
         logger.info(f"Creating loan for borrower: {user.user_id}, amount: {request_data.amount}")
         
@@ -220,45 +220,45 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
         invitation_results = {'invitations_created': 0, 'participants_created': 0}
         if request_data.lenders:
             try:
-        invitation_results = create_lender_invitations(loan_id, user.user_id, request_data.lenders, now)
+                invitation_results = create_lender_invitations(loan_id, user.user_id, request_data.lenders, now)
 
-        # Check if invitation creation had errors
-        if 'error' in invitation_results:
-            logger.error(f"Invitation creation failed for loan {loan_id}: {invitation_results['error']}")
-            # Mark loan as FAILED so it can be manually reviewed/cleaned up
-            DynamoDBHelper.update_item(
-                TABLE_NAMES['LOANS'],
-                {'loan_id': loan_id},
-                'SET #status = :failed, error_message = :error',
-                {
-                    ':failed': 'FAILED',
-                    ':error': f"Invitation creation failed: {invitation_results['error']}"
-                },
-                expression_attribute_names={'#status': 'status'}
-            )
-            return ResponseHelper.internal_error_response(
-                f"Loan created but invitation processing failed. Loan ID: {loan_id}. Please contact support."
-            )
+                # Check if invitation creation had errors
+                if 'error' in invitation_results:
+                    logger.error(f"Invitation creation failed for loan {loan_id}: {invitation_results['error']}")
+                    # Mark loan as FAILED so it can be manually reviewed/cleaned up
+                    DynamoDBHelper.update_item(
+                        TABLE_NAMES['LOANS'],
+                        {'loan_id': loan_id},
+                        'SET #status = :failed, error_message = :error',
+                        {
+                            ':failed': 'FAILED',
+                            ':error': f"Invitation creation failed: {invitation_results['error']}"
+                        },
+                        expression_attribute_names={'#status': 'status'}
+                    )
+                    return ResponseHelper.internal_error_response(
+                        f"Loan created but invitation processing failed. Loan ID: {loan_id}. Please contact support."
+                    )
 
             except Exception as invitation_error:
-        logger.error(f"Unexpected error creating invitations for loan {loan_id}: {str(invitation_error)}")
-        # Mark loan as FAILED
-        try:
-            DynamoDBHelper.update_item(
-                TABLE_NAMES['LOANS'],
-                {'loan_id': loan_id},
-                'SET #status = :failed, error_message = :error',
-                {
-                    ':failed': 'FAILED',
-                    ':error': f"Unexpected error: {str(invitation_error)}"
-                },
-                expression_attribute_names={'#status': 'status'}
-            )
-        except:
-            pass  # Best effort
-        return ResponseHelper.internal_error_response(
-            f"Loan created but invitation processing failed. Loan ID: {loan_id}. Please contact support."
-        )
+                logger.error(f"Unexpected error creating invitations for loan {loan_id}: {str(invitation_error)}")
+                # Mark loan as FAILED
+                try:
+                    DynamoDBHelper.update_item(
+                        TABLE_NAMES['LOANS'],
+                        {'loan_id': loan_id},
+                        'SET #status = :failed, error_message = :error',
+                        {
+                            ':failed': 'FAILED',
+                            ':error': f"Unexpected error: {str(invitation_error)}"
+                        },
+                        expression_attribute_names={'#status': 'status'}
+                    )
+                except:
+                    pass  # Best effort
+                return ResponseHelper.internal_error_response(
+                    f"Loan created but invitation processing failed. Loan ID: {loan_id}. Please contact support."
+                )
         else:
             logger.info(f"Loan {loan_id} created with no initial lenders")
         
@@ -296,22 +296,22 @@ def handle_create_loan(event: Dict[str, Any]) -> Dict[str, Any]:
         # Store idempotency record if key was provided
         if idempotency_key:
             try:
-        import time
-        ttl = int(time.time()) + (24 * 60 * 60)  # 24 hours from now
-        idempotency_record = {
-            'idempotency_key': idempotency_key,
-            'user_id': user.user_id,
-            'loan_id': loan_id,
-            'status_code': 201,
-            'response_body': json.dumps(success_response),  # Store as JSON string to avoid Decimal issues
-            'created_at': now,
-            'ttl': ttl
-        }
-        DynamoDBHelper.put_item(TABLE_NAMES['IDEMPOTENCY_KEYS'], idempotency_record)
-        logger.info(f"Stored idempotency record for key: {idempotency_key}")
+                import time
+                ttl = int(time.time()) + (24 * 60 * 60)  # 24 hours from now
+                idempotency_record = {
+                    'idempotency_key': idempotency_key,
+                    'user_id': user.user_id,
+                    'loan_id': loan_id,
+                    'status_code': 201,
+                    'response_body': json.dumps(success_response),  # Store as JSON string to avoid Decimal issues
+                    'created_at': now,
+                    'ttl': ttl
+                }
+                DynamoDBHelper.put_item(TABLE_NAMES['IDEMPOTENCY_KEYS'], idempotency_record)
+                logger.info(f"Stored idempotency record for key: {idempotency_key}")
             except Exception as idempotency_error:
-        # Don't fail the request if idempotency storage fails
-        logger.warning(f"Failed to store idempotency record: {str(idempotency_error)}")
+                # Don't fail the request if idempotency storage fails
+                logger.warning(f"Failed to store idempotency record: {str(idempotency_error)}")
 
         return ResponseHelper.create_response(201, success_response)
         
@@ -404,80 +404,80 @@ def handle_get_loan_details(event: Dict[str, Any]) -> Dict[str, Any]:
             user_participation = participant_data['user_participation']
             logger.info(f"Calculating lender payments for user {user.user_id}, contribution: {user_participation['contribution_amount']}")
             try:
-        lender_payments = PaymentCalculator.calculate_lender_payments(
-            contribution_amount=float(user_participation['contribution_amount']),
-            annual_rate=float(loan['interest_rate']) / 100,  # Convert percentage to decimal
-            total_payments=int(maturity_terms['total_payments']),
-            payment_frequency=maturity_terms['payment_frequency']
-        )
-        logger.info(f"Lender payment calculation successful: {lender_payments}")
+                lender_payments = PaymentCalculator.calculate_lender_payments(
+                    contribution_amount=float(user_participation['contribution_amount']),
+                    annual_rate=float(loan['interest_rate']) / 100,  # Convert percentage to decimal
+                    total_payments=int(maturity_terms['total_payments']),
+                    payment_frequency=maturity_terms['payment_frequency']
+                )
+                logger.info(f"Lender payment calculation successful: {lender_payments}")
             except Exception as e:
-        logger.error(f"Error calculating lender payments: {str(e)}")
-        lender_payments = {
-            'payment_amount': 0,
-            'total_interest': 0,
-            'total_repayment': 0
-        }
+                logger.error(f"Error calculating lender payments: {str(e)}")
+                lender_payments = {
+                    'payment_amount': 0,
+                    'total_interest': 0,
+                    'total_repayment': 0
+                }
             
             user_participation_with_payments = {
-        'lender_id': user_participation['lender_id'],
-        'contribution_amount': user_participation['contribution_amount'],
-        'status': user_participation['status'],
-        'invited_at': user_participation['invited_at'],
-        'responded_at': user_participation.get('responded_at'),
-        'total_paid': user_participation.get('total_paid', 0),
-        'remaining_balance': user_participation.get('remaining_balance', user_participation['contribution_amount']),
-        'payment_amount': lender_payments['payment_amount'],
-        'total_interest': lender_payments['total_interest'],
-        'total_repayment': lender_payments['total_repayment'],
-        'disclaimer': "These calculations are estimates for informational purposes only. Not financial or legal advice. No warranties or guarantees of accuracy. Your actual returns, payment schedule, and terms will be established in your signed agreement with the borrower. Independently verify all calculations and consult your financial and legal advisors before committing funds. We accept no liability for investment decisions based on these estimates."
+                'lender_id': user_participation['lender_id'],
+                'contribution_amount': user_participation['contribution_amount'],
+                'status': user_participation['status'],
+                'invited_at': user_participation['invited_at'],
+                'responded_at': user_participation.get('responded_at'),
+                'total_paid': user_participation.get('total_paid', 0),
+                'remaining_balance': user_participation.get('remaining_balance', user_participation['contribution_amount']),
+                'payment_amount': lender_payments['payment_amount'],
+                'total_interest': lender_payments['total_interest'],
+                'total_repayment': lender_payments['total_repayment'],
+                'disclaimer': "These calculations are estimates for informational purposes only. Not financial or legal advice. No warranties or guarantees of accuracy. Your actual returns, payment schedule, and terms will be established in your signed agreement with the borrower. Independently verify all calculations and consult your financial and legal advisors before committing funds. We accept no liability for investment decisions based on these estimates."
             }
-        
+
         elif is_borrower:
             # BORROWER: Calculate payment details for each lender + total
             lender_payment_details = []
             total_payment_amount = 0
-            
+
             for participant in participant_data['participants']:
-        # Only calculate for non-pending participants (those with real lender_ids)
-        if not participant['lender_id'].startswith('pending:'):
-            lender_payments = PaymentCalculator.calculate_lender_payments(
-                contribution_amount=float(participant['contribution_amount']),
-                annual_rate=float(loan['interest_rate']) / 100,
-                total_payments=int(maturity_terms['total_payments']),
-                payment_frequency=maturity_terms['payment_frequency']
-            )
-            
-            lender_detail = {
-                'lender_id': participant['lender_id'],
-                'lender_name': participant['lender_name'],
-                'lender_email': participant['lender_email'],
-                'contribution_amount': participant['contribution_amount'],
-                'payment_amount': lender_payments['payment_amount'],
-                'status': participant['status']
-            }
-            
-            # Include ACH details for accepted lenders (borrower needs this for payments)
-            if 'ach_details' in participant:
-                lender_detail['ach_details'] = participant['ach_details']
-            
-            lender_payment_details.append(lender_detail)
-            total_payment_amount += lender_payments['payment_amount']
-            
+                # Only calculate for non-pending participants (those with real lender_ids)
+                if not participant['lender_id'].startswith('pending:'):
+                    lender_payments = PaymentCalculator.calculate_lender_payments(
+                        contribution_amount=float(participant['contribution_amount']),
+                        annual_rate=float(loan['interest_rate']) / 100,
+                        total_payments=int(maturity_terms['total_payments']),
+                        payment_frequency=maturity_terms['payment_frequency']
+                    )
+
+                    lender_detail = {
+                        'lender_id': participant['lender_id'],
+                        'lender_name': participant['lender_name'],
+                        'lender_email': participant['lender_email'],
+                        'contribution_amount': participant['contribution_amount'],
+                        'payment_amount': lender_payments['payment_amount'],
+                        'status': participant['status']
+                    }
+
+                    # Include ACH details for accepted lenders (borrower needs this for payments)
+                    if 'ach_details' in participant:
+                        lender_detail['ach_details'] = participant['ach_details']
+
+                    lender_payment_details.append(lender_detail)
+                    total_payment_amount += lender_payments['payment_amount']
+
             # Generate payment schedule dates
             payment_dates = PaymentCalculator._generate_payment_schedule(
-        maturity_terms['start_date'],
-        maturity_terms['payment_frequency'],
-        int(maturity_terms['total_payments'])
+                maturity_terms['start_date'],
+                maturity_terms['payment_frequency'],
+                int(maturity_terms['total_payments'])
             )
-            
+
             borrower_payment_details = {
-        'total_payment_amount': round(total_payment_amount, 2),
-        'payment_frequency': maturity_terms['payment_frequency'],
-        'total_payments': int(maturity_terms['total_payments']),
-        'payment_dates': payment_dates,
-        'lender_payments': lender_payment_details,
-        'disclaimer': "Estimates for informational purposes only. Not financial or legal advice. No warranties or guarantees of accuracy. Your lender will provide final payment amounts and terms. Review all documents and consult your lender before signing. We accept no liability for reliance on these estimates."
+                'total_payment_amount': round(total_payment_amount, 2),
+                'payment_frequency': maturity_terms['payment_frequency'],
+                'total_payments': int(maturity_terms['total_payments']),
+                'payment_dates': payment_dates,
+                'lender_payments': lender_payment_details,
+                'disclaimer': "Estimates for informational purposes only. Not financial or legal advice. No warranties or guarantees of accuracy. Your lender will provide final payment amounts and terms. Review all documents and consult your lender before signing. We accept no liability for reliance on these estimates."
             }
         
         # Prepare detailed response
@@ -550,38 +550,38 @@ def handle_get_my_loans(event: Dict[str, Any]) -> Dict[str, Any]:
 
             # Handle backward compatibility for old loans without maturity terms
             if 'start_date' in loan:
-        # New format with enhanced maturity terms
-        term_display = f"{loan['payment_frequency']} for {loan['term_length']} months"
+                # New format with enhanced maturity terms
+                term_display = f"{loan['payment_frequency']} for {loan['term_length']} months"
             else:
-        # Old format - use existing term field
-        term_display = loan.get('term', 'Unknown')
+                # Old format - use existing term field
+                term_display = loan.get('term', 'Unknown')
 
             enriched_loan = {
-        'loan_id': loan['loan_id'],
-        'loan_name': loan_name,
-        'amount': float(loan['amount']),
-        'interest_rate': float(loan['interest_rate']),
-        'term': term_display,
-        'purpose': loan['purpose'],
-        'description': loan['description'],
-        'status': loan['status'],
-        'total_funded': float(loan['total_funded']),
-        'created_at': loan['created_at'],
-        'participant_count': len(participants),
-        'accepted_participants': len([p for p in participants if p['status'] == ParticipantStatus.ACCEPTED]),
-        'funding_progress': funding_progress,
-        'participants': [
-            {
-                'lender_id': p['lender_id'],
-                'lender_name': p.get('lender_name'),
-                'lender_email': p.get('lender_email'),
-                'contribution_amount': float(p['contribution_amount']),
-                'status': p['status'],
-                'total_paid': float(p.get('total_paid', 0)),
-                'remaining_balance': float(p.get('remaining_balance', p['contribution_amount']))
-            }
-            for p in participants
-        ]
+                'loan_id': loan['loan_id'],
+                'loan_name': loan_name,
+                'amount': float(loan['amount']),
+                'interest_rate': float(loan['interest_rate']),
+                'term': term_display,
+                'purpose': loan['purpose'],
+                'description': loan['description'],
+                'status': loan['status'],
+                'total_funded': float(loan['total_funded']),
+                'created_at': loan['created_at'],
+                'participant_count': len(participants),
+                'accepted_participants': len([p for p in participants if p['status'] == ParticipantStatus.ACCEPTED]),
+                'funding_progress': funding_progress,
+                'participants': [
+                    {
+                        'lender_id': p['lender_id'],
+                        'lender_name': p.get('lender_name'),
+                        'lender_email': p.get('lender_email'),
+                        'contribution_amount': float(p['contribution_amount']),
+                        'status': p['status'],
+                        'total_paid': float(p.get('total_paid', 0)),
+                        'remaining_balance': float(p.get('remaining_balance', p['contribution_amount']))
+                    }
+                    for p in participants
+                ]
             }
             enriched_loans.append(enriched_loan)
         
@@ -621,68 +621,68 @@ def create_lender_invitations(loan_id: str, borrower_id: str, lenders: List[Dict
             
             # Check if user exists for this email
             existing_users = DynamoDBHelper.query_items(
-        TABLE_NAMES['USERS'],
-        'email = :email',
-        {':email': email},
-        'EmailIndex'
-            )
-            
-            if existing_users:
-        # User exists - create participant record directly
-        user = existing_users[0]
-        participant = {
-            'loan_id': loan_id,
-            'lender_id': user['user_id'],
-            'contribution_amount': Decimal(str(contribution_amount)),
-            'status': ParticipantStatus.PENDING,
-            'invited_at': created_at,
-            'total_paid': Decimal('0'),
-            'remaining_balance': Decimal(str(contribution_amount))
-        }
-        DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], participant)
-        participants_created += 1
-        logger.info(f"Created participant record for existing user: {email}")
-        
-        # Activate user as lender if not already
-        if not user.get('is_lender', False):
-            DynamoDBHelper.update_item(
                 TABLE_NAMES['USERS'],
-                {'user_id': user['user_id']},
-                'SET is_lender = :true, user_type = :active_lender',
-                {
-                    ':true': True,
-                    ':active_lender': UserType.ACTIVE_LENDER
-                }
+                'email = :email',
+                {':email': email},
+                'EmailIndex'
             )
-            logger.info(f"Activated lender role for user: {email}")
-        
+
+            if existing_users:
+                # User exists - create participant record directly
+                user = existing_users[0]
+                participant = {
+                    'loan_id': loan_id,
+                    'lender_id': user['user_id'],
+                    'contribution_amount': Decimal(str(contribution_amount)),
+                    'status': ParticipantStatus.PENDING,
+                    'invited_at': created_at,
+                    'total_paid': Decimal('0'),
+                    'remaining_balance': Decimal(str(contribution_amount))
+                }
+                DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], participant)
+                participants_created += 1
+                logger.info(f"Created participant record for existing user: {email}")
+
+                # Activate user as lender if not already
+                if not user.get('is_lender', False):
+                    DynamoDBHelper.update_item(
+                        TABLE_NAMES['USERS'],
+                        {'user_id': user['user_id']},
+                        'SET is_lender = :true, user_type = :active_lender',
+                        {
+                            ':true': True,
+                            ':active_lender': UserType.ACTIVE_LENDER
+                        }
+                    )
+                    logger.info(f"Activated lender role for user: {email}")
+
             else:
-        # User doesn't exist - create invitation record
-        invitation_id = UUIDHelper.generate_uuid()
-        invitation = {
-            'invitation_id': invitation_id,
-            'inviter_id': borrower_id,
-            'invitee_email': email,
-            'loan_id': loan_id,
-            'status': InvitationStatus.PENDING,
-            'created_at': created_at
-        }
-        DynamoDBHelper.put_item(TABLE_NAMES['INVITATIONS'], invitation)
-        invitations_created += 1
-        logger.info(f"Created invitation record for new email: {email}, loan: {loan_id}")
-        
-        # Also create participant record with placeholder lender_id
-        participant = {
-            'loan_id': loan_id,
-            'lender_id': f"pending:{email}",  # Placeholder until user registers
-            'contribution_amount': Decimal(str(contribution_amount)),
-            'status': ParticipantStatus.PENDING,
-            'invited_at': created_at,
-            'total_paid': Decimal('0'),
-            'remaining_balance': Decimal(str(contribution_amount))
-        }
-        DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], participant)
-        participants_created += 1
+                # User doesn't exist - create invitation record
+                invitation_id = UUIDHelper.generate_uuid()
+                invitation = {
+                    'invitation_id': invitation_id,
+                    'inviter_id': borrower_id,
+                    'invitee_email': email,
+                    'loan_id': loan_id,
+                    'status': InvitationStatus.PENDING,
+                    'created_at': created_at
+                }
+                DynamoDBHelper.put_item(TABLE_NAMES['INVITATIONS'], invitation)
+                invitations_created += 1
+                logger.info(f"Created invitation record for new email: {email}, loan: {loan_id}")
+
+                # Also create participant record with placeholder lender_id
+                participant = {
+                    'loan_id': loan_id,
+                    'lender_id': f"pending:{email}",  # Placeholder until user registers
+                    'contribution_amount': Decimal(str(contribution_amount)),
+                    'status': ParticipantStatus.PENDING,
+                    'invited_at': created_at,
+                    'total_paid': Decimal('0'),
+                    'remaining_balance': Decimal(str(contribution_amount))
+                }
+                DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], participant)
+                participants_created += 1
         
         return {
             'invitations_created': invitations_created,
@@ -732,7 +732,7 @@ def validate_loan_access(loan_id: str, user_id: str, user_email: str, borrower_i
         for participant in participants:
             # Check both actual user_id and pending:email format
             if participant['lender_id'] == user_id or participant['lender_id'] == pending_lender_id:
-        logger.info(f"Loan access granted: user {user_id} found as participant with lender_id {participant['lender_id']}")
+                logger.info(f"Loan access granted: user {user_id} found as participant with lender_id {participant['lender_id']}")
         return True
         
         logger.info(f"Loan access denied: user {user_id} not found in participants")
@@ -779,13 +779,13 @@ def get_filtered_participant_data_with_access_check(
             pending_lender_id = f"pending:{requesting_user_email}"
 
             for participant in participants:
-        if participant['lender_id'] == requesting_user_id or participant['lender_id'] == pending_lender_id:
-            has_access = True
-            break
+                if participant['lender_id'] == requesting_user_id or participant['lender_id'] == pending_lender_id:
+                    has_access = True
+                    break
 
             if not has_access:
-        logger.warning(f"Access denied to loan {loan_id} for user {requesting_user_id}")
-        return None
+                logger.warning(f"Access denied to loan {loan_id} for user {requesting_user_id}")
+                return None
 
         # Continue with data enrichment (same logic as before)
         return _enrich_participant_data(participants, loan_id, requesting_user_id, requesting_user_email, is_borrower)
@@ -850,76 +850,69 @@ def _enrich_participant_data(
 
         # Handle pending invitations (placeholder lender_id)
         if lender_id.startswith('pending:'):
-        email = lender_id.replace('pending:', '')
-        enriched_participant = {
-            'lender_id': lender_id,
-            'lender_name': f"Pending: {email}",
-            'lender_email': email,
-            'contribution_amount': float(participant['contribution_amount']),
-            'status': participant['status'],
-            'invited_at': participant['invited_at'],
-            'responded_at': participant.get('responded_at')
-        }
-            else:
-        # Get lender information from batch results
-        lender = lender_map.get(lender_id)
-        enriched_participant = {
-            'lender_id': lender_id,
-            'lender_name': lender['name'] if lender else 'Unknown',
-            'lender_email': lender['email'] if lender else 'Unknown',
-            'contribution_amount': float(participant['contribution_amount']),
-            'status': participant['status'],
-            'invited_at': participant['invited_at'],
-            'responded_at': participant.get('responded_at'),
-            # Payment tracking fields
-            'total_paid': float(participant.get('total_paid', 0)),
-            'remaining_balance': float(participant.get('remaining_balance', participant['contribution_amount']))
-        }
-
-        # Include ACH details from batch results
-        if participant['status'] == ParticipantStatus.ACCEPTED and is_borrower:
-            ach_details = ach_map.get(lender_id)
-            if ach_details:
-                enriched_participant['ach_details'] = {
-                    'bank_name': ach_details['bank_name'],
-                    'account_type': ach_details['account_type'],
-                    'routing_number': ach_details['routing_number'],
-                    'account_number': ach_details['account_number'],
-                    'special_instructions': ach_details.get('special_instructions')
-                }
-            
-            # Check if this is the requesting user's participation
-            # Handle both actual user_id and pending:email format
-            pending_lender_id = f"pending:{requesting_user_email}"
-            logger.info(f"Checking participation: lender_id={lender_id}, requesting_user_id={requesting_user_id}, pending_lender_id={pending_lender_id}")
-            if lender_id == requesting_user_id or lender_id == pending_lender_id:
-        logger.info(f"MATCH FOUND! Setting user_participation for {requesting_user_id}")
-        user_participation = enriched_participant
-            else:
-        logger.info(f"No match: {lender_id} != {requesting_user_id} and {lender_id} != {pending_lender_id}")
-            
-            # Add to all participants list (will be filtered based on role)
-            all_participants.append(enriched_participant)
-        
-        # Apply privacy filtering based on user role
-        if is_borrower:
-            # Borrowers see all participants (for loan management)
-            return {
-        'user_participation': None,  # Not applicable for borrowers
-        'participants': all_participants
+            email = lender_id.replace('pending:', '')
+            enriched_participant = {
+                'lender_id': lender_id,
+                'lender_name': f"Pending: {email}",
+                'lender_email': email,
+                'contribution_amount': float(participant['contribution_amount']),
+                'status': participant['status'],
+                'invited_at': participant['invited_at'],
+                'responded_at': participant.get('responded_at')
             }
         else:
-            # Lenders see only their own participation, no other lender info
-            return {
-        'user_participation': user_participation,
-        'participants': []  # Empty for lenders - privacy protection
+            # Get lender information from batch results
+            lender = lender_map.get(lender_id)
+            enriched_participant = {
+                'lender_id': lender_id,
+                'lender_name': lender['name'] if lender else 'Unknown',
+                'lender_email': lender['email'] if lender else 'Unknown',
+                'contribution_amount': float(participant['contribution_amount']),
+                'status': participant['status'],
+                'invited_at': participant['invited_at'],
+                'responded_at': participant.get('responded_at'),
+                # Payment tracking fields
+                'total_paid': float(participant.get('total_paid', 0)),
+                'remaining_balance': float(participant.get('remaining_balance', participant['contribution_amount']))
             }
-        
-    except Exception as e:
-        logger.error(f"Error getting filtered participant data: {str(e)}")
+
+            # Include ACH details from batch results
+            if participant['status'] == ParticipantStatus.ACCEPTED and is_borrower:
+                ach_details = ach_map.get(lender_id)
+                if ach_details:
+                    enriched_participant['ach_details'] = {
+                        'bank_name': ach_details['bank_name'],
+                        'account_type': ach_details['account_type'],
+                        'routing_number': ach_details['routing_number'],
+                        'account_number': ach_details['account_number'],
+                        'special_instructions': ach_details.get('special_instructions')
+                    }
+
+        # Check if this is the requesting user's participation
+        # Handle both actual user_id and pending:email format
+        pending_lender_id = f"pending:{requesting_user_email}"
+        logger.info(f"Checking participation: lender_id={lender_id}, requesting_user_id={requesting_user_id}, pending_lender_id={pending_lender_id}")
+        if lender_id == requesting_user_id or lender_id == pending_lender_id:
+            logger.info(f"MATCH FOUND! Setting user_participation for {requesting_user_id}")
+            user_participation = enriched_participant
+        else:
+            logger.info(f"No match: {lender_id} != {requesting_user_id} and {lender_id} != {pending_lender_id}")
+
+        # Add to all participants list (will be filtered based on role)
+        all_participants.append(enriched_participant)
+
+    # Apply privacy filtering based on user role
+    if is_borrower:
+        # Borrowers see all participants (for loan management)
         return {
-            'user_participation': None,
-            'participants': []
+            'user_participation': None,  # Not applicable for borrowers
+            'participants': all_participants
+        }
+    else:
+        # Lenders see only their own participation, no other lender info
+        return {
+            'user_participation': user_participation,
+            'participants': []  # Empty for lenders - privacy protection
         }
 
 
@@ -946,47 +939,47 @@ def get_loan_participants(loan_id: str) -> List[Dict[str, Any]]:
             
             # Handle pending invitations (placeholder lender_id)
             if lender_id.startswith('pending:'):
-        email = lender_id.replace('pending:', '')
-        enriched_participant = {
-            'lender_id': lender_id,
-            'lender_name': f"Pending: {email}",
-            'lender_email': email,
-            'contribution_amount': float(participant['contribution_amount']),
-            'status': participant['status'],
-            'invited_at': participant['invited_at'],
-            'responded_at': participant.get('responded_at')
-        }
-            else:
-        # Get lender information
-        lender = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': lender_id})
-        enriched_participant = {
-            'lender_id': lender_id,
-            'lender_name': lender['name'] if lender else 'Unknown',
-            'lender_email': lender['email'] if lender else 'Unknown',
-            'contribution_amount': float(participant['contribution_amount']),
-            'status': participant['status'],
-            'invited_at': participant['invited_at'],
-            'responded_at': participant.get('responded_at'),
-            # Payment tracking fields
-            'total_paid': float(participant.get('total_paid', 0)),
-            'remaining_balance': float(participant.get('remaining_balance', participant['contribution_amount']))
-        }
-
-        # Include ACH details for accepted participants (needed for repayment)
-        if participant['status'] == ParticipantStatus.ACCEPTED:
-            ach_details = DynamoDBHelper.get_item(
-                TABLE_NAMES['ACH_DETAILS'], 
-                {'user_id': lender_id, 'loan_id': loan_id}
-            )
-            if ach_details:
-                enriched_participant['ach_details'] = {
-                    'bank_name': ach_details['bank_name'],
-                    'account_type': ach_details['account_type'],
-                    'routing_number': ach_details['routing_number'],
-                    'account_number': ach_details['account_number'],
-                    'special_instructions': ach_details.get('special_instructions')
+                email = lender_id.replace('pending:', '')
+                enriched_participant = {
+                    'lender_id': lender_id,
+                    'lender_name': f"Pending: {email}",
+                    'lender_email': email,
+                    'contribution_amount': float(participant['contribution_amount']),
+                    'status': participant['status'],
+                    'invited_at': participant['invited_at'],
+                    'responded_at': participant.get('responded_at')
                 }
-            
+            else:
+                # Get lender information
+                lender = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': lender_id})
+                enriched_participant = {
+                    'lender_id': lender_id,
+                    'lender_name': lender['name'] if lender else 'Unknown',
+                    'lender_email': lender['email'] if lender else 'Unknown',
+                    'contribution_amount': float(participant['contribution_amount']),
+                    'status': participant['status'],
+                    'invited_at': participant['invited_at'],
+                    'responded_at': participant.get('responded_at'),
+                    # Payment tracking fields
+                    'total_paid': float(participant.get('total_paid', 0)),
+                    'remaining_balance': float(participant.get('remaining_balance', participant['contribution_amount']))
+                }
+
+                # Include ACH details for accepted participants (needed for repayment)
+                if participant['status'] == ParticipantStatus.ACCEPTED:
+                    ach_details = DynamoDBHelper.get_item(
+                        TABLE_NAMES['ACH_DETAILS'],
+                        {'user_id': lender_id, 'loan_id': loan_id}
+                    )
+                    if ach_details:
+                        enriched_participant['ach_details'] = {
+                            'bank_name': ach_details['bank_name'],
+                            'account_type': ach_details['account_type'],
+                            'routing_number': ach_details['routing_number'],
+                            'account_number': ach_details['account_number'],
+                            'special_instructions': ach_details.get('special_instructions')
+                        }
+
             enriched_participants.append(enriched_participant)
         
         return enriched_participants
@@ -1141,10 +1134,10 @@ def handle_add_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
         new_lenders = []
         for lender in lender_data:
             try:
-        validated = ValidationHelper.validate_request_body(LenderInviteRequest, lender)
-        new_lenders.append(validated)
+                validated = ValidationHelper.validate_request_body(LenderInviteRequest, lender)
+                new_lenders.append(validated)
             except ValueError as e:
-        return ResponseHelper.validation_error_response(f'Invalid lender data: {str(e)}')
+                return ResponseHelper.validation_error_response(f'Invalid lender data: {str(e)}')
 
         # Calculate current total invited
         current_invited = calculate_total_invited(loan_id)
@@ -1164,7 +1157,7 @@ def handle_add_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
         user_email_lower = user.email.lower()
         for lender in new_lenders:
             if lender.email.lower() == user_email_lower:
-        return ResponseHelper.validation_error_response(
+                return ResponseHelper.validation_error_response(
             "You cannot invite yourself as a lender to your own loan"
         )
 
@@ -1181,9 +1174,9 @@ def handle_add_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
         for participant in existing_participants:
             lender_id = participant['lender_id']
             if lender_id.startswith('pending:'):
-        existing_lender_emails.add(lender_id.replace('pending:', '').lower())
+                existing_lender_emails.add(lender_id.replace('pending:', '').lower())
             else:
-        existing_lender_ids.add(lender_id)
+                existing_lender_ids.add(lender_id)
         # Also get the actual email from user record
         try:
             lender_user = DynamoDBHelper.get_item(TABLE_NAMES['USERS'], {'user_id': lender_id})
@@ -1196,7 +1189,7 @@ def handle_add_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
         for lender in new_lenders:
             lender_email_lower = lender.email.lower()
             if lender_email_lower in existing_lender_emails:
-        return ResponseHelper.validation_error_response(
+                return ResponseHelper.validation_error_response(
             f"{lender.email} has already been invited to this loan"
         )
 
@@ -1293,45 +1286,45 @@ def handle_search_lenders(event: Dict[str, Any]) -> Dict[str, Any]:
             )
             
             for participant in participants:
-        lender_id = participant['lender_id']
-        
-        # Skip pending lenders (not registered yet)
-        if lender_id.startswith('pending:'):
-            continue
-        
-        # Only include accepted lenders (proven track record)
-        if participant['status'] != ParticipantStatus.ACCEPTED:
-            continue
-        
-        # Get or initialize lender stats
-        if lender_id not in lender_map:
-            lender = DynamoDBHelper.get_item(
-                TABLE_NAMES['USERS'],
-                {'user_id': lender_id}
-            )
-            
-            if not lender:
-                continue
-            
-            lender_map[lender_id] = {
-                'lender_id': lender_id,
-                'name': lender['name'],
-                'email': lender['email'],
-                'investment_count': 0,
-                'total_invested': 0,
-                'investments': []
-            }
-        
-        # Aggregate stats
-        lender_map[lender_id]['investment_count'] += 1
-        lender_map[lender_id]['total_invested'] += float(participant['contribution_amount'])
-        lender_map[lender_id]['investments'].append({
-            'loan_name': loan.get('loan_name', loan['purpose']),
-            'amount': float(participant['contribution_amount']),
-            'apr': float(loan['interest_rate']),
-            'status': loan['status'],
-            'date': participant.get('responded_at', participant['invited_at'])
-        })
+                lender_id = participant['lender_id']
+
+                # Skip pending lenders (not registered yet)
+                if lender_id.startswith('pending:'):
+                    continue
+
+                # Only include accepted lenders (proven track record)
+                if participant['status'] != ParticipantStatus.ACCEPTED:
+                    continue
+
+                # Get or initialize lender stats
+                if lender_id not in lender_map:
+                    lender = DynamoDBHelper.get_item(
+                        TABLE_NAMES['USERS'],
+                        {'user_id': lender_id}
+                    )
+
+                    if not lender:
+                        continue
+
+                    lender_map[lender_id] = {
+                        'lender_id': lender_id,
+                        'name': lender['name'],
+                        'email': lender['email'],
+                        'investment_count': 0,
+                        'total_invested': 0,
+                        'investments': []
+                    }
+
+                # Aggregate stats
+                lender_map[lender_id]['investment_count'] += 1
+                lender_map[lender_id]['total_invested'] += float(participant['contribution_amount'])
+                lender_map[lender_id]['investments'].append({
+                    'loan_name': loan.get('loan_name', loan['purpose']),
+                    'amount': float(participant['contribution_amount']),
+                    'apr': float(loan['interest_rate']),
+                    'status': loan['status'],
+                    'date': participant.get('responded_at', participant['invited_at'])
+                })
         
         # Convert to list and calculate averages
         lenders = []
