@@ -946,32 +946,60 @@ def create_lender_invitations_batch(loan_id: str, borrower_id: str, lenders: Lis
                         # Continue anyway - this is not critical
 
             else:
-                # User doesn't exist - create invitation record
-                invitation_id = UUIDHelper.generate_uuid()
-                invitation = {
-                    'invitation_id': invitation_id,
-                    'inviter_id': borrower_id,
-                    'invitee_email': email_lower,
-                    'loan_id': loan_id,
-                    'status': InvitationStatus.PENDING,
-                    'created_at': created_at
-                }
-                DynamoDBHelper.put_item(TABLE_NAMES['INVITATIONS'], invitation)
-                invitations_created += 1
-                logger.info(f"Created invitation record for new email: {email}, loan: {loan_id}")
+                # User doesn't exist - check if invitation already exists for this email + loan
+                existing_invitations = DynamoDBHelper.query_items(
+                    TABLE_NAMES['INVITATIONS'],
+                    'loan_id = :loan_id',
+                    {':loan_id': loan_id},
+                    'LoanIndex'
+                )
+                
+                # Check if this email already has an invitation for this loan
+                invitation_exists = any(
+                    inv.get('invitee_email', '').lower() == email_lower 
+                    for inv in existing_invitations
+                )
+                
+                if not invitation_exists:
+                    # Create invitation record
+                    invitation_id = UUIDHelper.generate_uuid()
+                    invitation = {
+                        'invitation_id': invitation_id,
+                        'inviter_id': borrower_id,
+                        'invitee_email': email_lower,
+                        'loan_id': loan_id,
+                        'status': InvitationStatus.PENDING,
+                        'created_at': created_at
+                    }
+                    DynamoDBHelper.put_item(TABLE_NAMES['INVITATIONS'], invitation)
+                    invitations_created += 1
+                    logger.info(f"Created invitation record for new email: {email}, loan: {loan_id}")
+                else:
+                    logger.info(f"Invitation already exists for {email} on loan {loan_id}, skipping")
 
-                # Also create participant record with placeholder lender_id
-                participant = {
-                    'loan_id': loan_id,
-                    'lender_id': f"pending:{email_lower}",  # Placeholder until user registers
-                    'contribution_amount': Decimal(str(contribution_amount)),
-                    'status': ParticipantStatus.PENDING,
-                    'invited_at': created_at,
-                    'total_paid': Decimal('0'),
-                    'remaining_balance': Decimal(str(contribution_amount))
-                }
-                DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], participant)
-                participants_created += 1
+                # Check if participant record already exists
+                pending_lender_id = f"pending:{email_lower}"
+                existing_participant = DynamoDBHelper.get_item(
+                    TABLE_NAMES['LOAN_PARTICIPANTS'],
+                    {'loan_id': loan_id, 'lender_id': pending_lender_id}
+                )
+                
+                if not existing_participant:
+                    # Create participant record with placeholder lender_id
+                    participant = {
+                        'loan_id': loan_id,
+                        'lender_id': pending_lender_id,  # Placeholder until user registers
+                        'contribution_amount': Decimal(str(contribution_amount)),
+                        'status': ParticipantStatus.PENDING,
+                        'invited_at': created_at,
+                        'total_paid': Decimal('0'),
+                        'remaining_balance': Decimal(str(contribution_amount))
+                    }
+                    DynamoDBHelper.put_item(TABLE_NAMES['LOAN_PARTICIPANTS'], participant)
+                    participants_created += 1
+                    logger.info(f"Created participant record for pending lender: {email}")
+                else:
+                    logger.info(f"Participant record already exists for {email} on loan {loan_id}, skipping")
 
         logger.info(f"Batch invitation creation complete: {invitations_created} invitations, {participants_created} participants")
 
