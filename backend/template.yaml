@@ -76,6 +76,8 @@ Resources:
         - ResourcePath: "/*"
           HttpMethod: "*"
           MetricsEnabled: true
+          ThrottlingBurstLimit: 100
+          ThrottlingRateLimit: 50
 
   # Lambda Functions
   AuthHandlerFunction:
@@ -137,6 +139,7 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName:
               Fn::ImportValue: !Sub "${DatabaseStackName}-IdempotencyKeysTable"
+        - CloudWatchPutMetricPolicy: {}
       Events:
         CreateLoanApi:
           Type: Api

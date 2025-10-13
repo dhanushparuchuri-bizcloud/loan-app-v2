@@ -7,6 +7,19 @@ from typing import Dict, List, Optional, Any, Union
 import boto3
 from botocore.exceptions import ClientError
 
+# Import custom exceptions
+try:
+    from shared.exceptions import (
+        DatabaseThrottledException,
+        DatabaseUnavailableException
+    )
+except ImportError:
+    # Fallback if exceptions module not available
+    class DatabaseThrottledException(Exception):
+        pass
+    class DatabaseUnavailableException(Exception):
+        pass
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -27,7 +40,43 @@ TABLE_NAMES = {
 
 class DynamoDBHelper:
     """Helper class for common DynamoDB operations."""
-    
+
+    @staticmethod
+    def _handle_dynamodb_error(error: ClientError, operation: str) -> None:
+        """
+        Handle DynamoDB errors and raise appropriate custom exceptions.
+
+        Args:
+            error: The ClientError from boto3
+            operation: Name of the operation that failed
+
+        Raises:
+            DatabaseThrottledException: If request was throttled
+            DatabaseUnavailableException: If service is unavailable
+            Exception: For other errors
+        """
+        error_code = error.response.get('Error', {}).get('Code', '')
+        error_message = error.response.get('Error', {}).get('Message', str(error))
+
+        logger.error(f"DynamoDB {operation} Error [{error_code}]: {error_message}")
+
+        # Throttling errors
+        if error_code in ['ProvisionedThroughputExceededException', 'RequestLimitExceeded', 'ThrottlingException']:
+            raise DatabaseThrottledException(
+                f"Database request rate exceeded during {operation}. Please retry after a short delay.",
+                retry_after=5
+            )
+
+        # Service unavailable errors
+        if error_code in ['InternalServerError', 'ServiceUnavailable']:
+            raise DatabaseUnavailableException(
+                f"Database temporarily unavailable during {operation}. Please retry.",
+                retry_after=10
+            )
+
+        # All other errors
+        raise Exception(f"Database {operation} operation failed: {error_code}")
+
     @staticmethod
     def get_item(table_name: str, key: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -138,11 +187,12 @@ class DynamoDBHelper:
         expression_attribute_values: Dict[str, Any],
         index_name: Optional[str] = None,
         expression_attribute_names: Optional[Dict[str, str]] = None,
-        filter_expression: Optional[str] = None
+        filter_expression: Optional[str] = None,
+        scan_index_forward: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Query items from DynamoDB table.
-        
+
         Args:
             table_name: Name of the DynamoDB table
             key_condition_expression: Key condition for the query
@@ -150,33 +200,105 @@ class DynamoDBHelper:
             index_name: Name of the GSI to query (optional)
             expression_attribute_names: Names for the query expression (optional)
             filter_expression: Filter expression (optional)
-            
+            scan_index_forward: Sort order for range key (True=ascending, False=descending)
+
         Returns:
             List of items matching the query
-            
+
         Raises:
-            Exception: If database operation fails
+            DatabaseThrottledException: If request was throttled
+            DatabaseUnavailableException: If service is unavailable
+            Exception: For other database errors
         """
         try:
             table = dynamodb.Table(table_name)
             query_params = {
                 'KeyConditionExpression': key_condition_expression,
-                'ExpressionAttributeValues': expression_attribute_values
+                'ExpressionAttributeValues': expression_attribute_values,
+                'ScanIndexForward': scan_index_forward
             }
-            
+
             if index_name:
                 query_params['IndexName'] = index_name
             if expression_attribute_names:
                 query_params['ExpressionAttributeNames'] = expression_attribute_names
             if filter_expression:
                 query_params['FilterExpression'] = filter_expression
-            
+
             response = table.query(**query_params)
             return response.get('Items', [])
         except ClientError as e:
-            logger.error(f"DynamoDB Query Error: {e}")
-            raise Exception("Database operation failed")
-    
+            DynamoDBHelper._handle_dynamodb_error(e, "Query")
+
+    @staticmethod
+    def query_items_paginated(
+        table_name: str,
+        key_condition_expression: str,
+        expression_attribute_values: Dict[str, Any],
+        index_name: Optional[str] = None,
+        expression_attribute_names: Optional[Dict[str, str]] = None,
+        filter_expression: Optional[str] = None,
+        limit: Optional[int] = None,
+        exclusive_start_key: Optional[Dict[str, Any]] = None,
+        scan_index_forward: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Query items from DynamoDB table with pagination support.
+        Returns both items and pagination metadata.
+
+        Args:
+            table_name: Name of the DynamoDB table
+            key_condition_expression: Key condition for the query
+            expression_attribute_values: Values for the query expression
+            index_name: Name of the GSI to query (optional)
+            expression_attribute_names: Names for the query expression (optional)
+            filter_expression: Filter expression (optional)
+            limit: Maximum number of items to return
+            exclusive_start_key: Pagination token from previous query
+            scan_index_forward: Sort order for range key (True=ascending, False=descending)
+
+        Returns:
+            Dictionary containing:
+                - items: List of items matching the query
+                - last_evaluated_key: Pagination token for next page (None if no more items)
+                - count: Number of items returned
+                - scanned_count: Number of items scanned
+
+        Raises:
+            DatabaseThrottledException: If request was throttled
+            DatabaseUnavailableException: If service is unavailable
+            Exception: For other database errors
+        """
+        try:
+            table = dynamodb.Table(table_name)
+            query_params = {
+                'KeyConditionExpression': key_condition_expression,
+                'ExpressionAttributeValues': expression_attribute_values,
+                'ScanIndexForward': scan_index_forward
+            }
+
+            if index_name:
+                query_params['IndexName'] = index_name
+            if expression_attribute_names:
+                query_params['ExpressionAttributeNames'] = expression_attribute_names
+            if filter_expression:
+                query_params['FilterExpression'] = filter_expression
+            if limit:
+                query_params['Limit'] = limit
+            if exclusive_start_key:
+                query_params['ExclusiveStartKey'] = exclusive_start_key
+
+            response = table.query(**query_params)
+
+            return {
+                'items': response.get('Items', []),
+                'last_evaluated_key': response.get('LastEvaluatedKey'),
+                'count': response.get('Count', 0),
+                'scanned_count': response.get('ScannedCount', 0)
+            }
+        except ClientError as e:
+            DynamoDBHelper._handle_dynamodb_error(e, "PaginatedQuery")
+
     @staticmethod
     def scan_items(
         table_name: str,

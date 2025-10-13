@@ -8,6 +8,7 @@ import logging
 import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
+from decimal import Decimal
 
 # Import shared utilities
 from shared.dynamodb_client import DynamoDBHelper, TABLE_NAMES
@@ -349,7 +350,8 @@ def update_participant_records(email: str, user_id: str, updated_at: str) -> Non
     """
     try:
         # Find all participant records with pending lender_id for this email
-        pending_lender_id = f"pending:{email}"
+        # IMPORTANT: Must use lowercase to match format used in create_lender_invitations_batch
+        pending_lender_id = f"pending:{email.lower()}"
 
         # Use LenderIndex GSI to query efficiently instead of scan
         all_participants = DynamoDBHelper.query_items(
