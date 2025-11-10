@@ -36,4 +36,6 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Deployment
 
-This app is deployed on AWS Amplify. Make sure to configure environment variables in the Amplify console before deploying.
+This app is deployed on AWS Amplify. Environment variables are configured in the Amplify console.
+
+After adding or updating environment variables, trigger a redeploy for changes to take effect.
